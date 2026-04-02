@@ -1,0 +1,4 @@
+.env
+auth
+dist
+node_modules
