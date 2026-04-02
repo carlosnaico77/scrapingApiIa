@@ -1,14 +1,14 @@
 {
   "name": "scrapingapiia",
   "version": "1.0.0",
-  "description": "",
+  "description": "Proyecto de Ia: Por Carlos Lozano Y Jhonatan Ramirez",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsc && node dist/index.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Carlos Lozano Y Jhonatan Ramirez",
   "license": "ISC",
   "type": "module",
   "devDependencies": {
