@@ -1,8 +1,7 @@
 import "./config/config.js"
+import { server } from "./server/server.js";
 
-import { scrapingApiIa } from "./Services/scrapingApiIa/index.js";
+const serverhttp = new server();
 
-const scraping = new scrapingApiIa();
-
-scraping.consultarIadeepseek("Me das un consejo rapido de 3 lineas para mejorar mi logica de progrmacion")
+serverhttp.inicialitServer()
 

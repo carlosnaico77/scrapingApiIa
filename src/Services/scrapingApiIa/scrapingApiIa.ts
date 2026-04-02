@@ -1,4 +1,5 @@
-import { chromium, type Page, path, rootRaiz, type BrowserContext } from "../../config/config.js";
+import { chromium, path, rootRaiz } from "../../config/config.js";
+import type { Page, BrowserContext } from "../../config/config.js"
 
 export class scrapingApiIa {
 
@@ -11,9 +12,10 @@ export class scrapingApiIa {
         try {
             await this.iniciarPlaywright()
             const respuesta = await this.consultar(consulta);
-            console.log(respuesta)
+            return respuesta
         } catch (err) {
             console.error(err)
+            return "Error al utilizar el servicio por favor valide con el proveedor"
         }
     }
 
@@ -43,8 +45,6 @@ export class scrapingApiIa {
     }
 
     private async consultar(Consulta: string) {
-
-
 
         try {
             const inputChat = this.page.getByPlaceholder('Mensaje a DeepSeek');

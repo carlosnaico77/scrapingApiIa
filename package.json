@@ -12,9 +12,19 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
-    "@types/node": "^25.5.0"
+    "@types/compression": "^1.8.1",
+    "@types/express": "^5.0.6",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^25.5.0",
+    "i": "^0.3.7",
+    "npm": "^11.12.1"
   },
   "dependencies": {
+    "compression": "^1.8.1",
+    "express": "^5.2.1",
+    "express-queue": "^0.0.13",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.1",
     "playwright": "^1.58.2"
   }
 }
