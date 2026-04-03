@@ -31,14 +31,14 @@ export class scrapingApiIa {
     async consultarIadeepseek(consulta: string) {
         try {
             await this.iniciarPlaywright();
-            return await this.ejecutarConsulta(consulta);
+            return await this.ejecutarConsultadeepseek(consulta);
         } catch (err) {
             console.error("Error en flujo:", err);
             return "Error al procesar la consulta.";
         }
     }
 
-    private async ejecutarConsulta(consulta: string) {
+    private async ejecutarConsultadeepseek(consulta: string) {
         try {
             const inputChat = this.page.getByPlaceholder('Mensaje a DeepSeek').or(this.page.getByPlaceholder("Message DeepSeek"));
             await inputChat.waitFor({ state: 'visible', timeout: 10000 });
@@ -75,6 +75,11 @@ export class scrapingApiIa {
 
 
 
+
+
+
+
+    
     private async limpiarMarkdown(locator: any): Promise<string> {
         return await locator.evaluate((container: HTMLElement) => {
             const renderers: Record<string, (el: HTMLElement) => string> = {
