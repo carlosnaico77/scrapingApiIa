@@ -65,7 +65,6 @@ export class scrapingApiIa {
                 await this.page.waitForTimeout(1000);
                 textoActual = await respuestaLocator.innerText();
             }
-            console.log(await this.limpiarMarkdown(respuestaLocator))
             return await this.limpiarMarkdown(respuestaLocator);
         } catch (err) {
             await this.page.reload();
@@ -79,7 +78,7 @@ export class scrapingApiIa {
 
 
 
-    
+
     private async limpiarMarkdown(locator: any): Promise<string> {
         return await locator.evaluate((container: HTMLElement) => {
             const renderers: Record<string, (el: HTMLElement) => string> = {
