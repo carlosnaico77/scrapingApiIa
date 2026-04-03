@@ -28,7 +28,7 @@ export class scrapingApiIa {
         try {
             const userPath = path.join(rootRaiz, "auth");
             this.context = await chromium.launchPersistentContext(userPath, {
-                headless: false,
+                headless: true,
                 channel: "chrome",
                 args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
                 viewport: { width: 1280, height: 720 }
