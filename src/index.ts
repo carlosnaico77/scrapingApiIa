@@ -7,5 +7,5 @@ const bot = new scrapingApiIa();
 const rutas = new routerApiIa(bot);
 const miServidor = new server(bot, rutas);
 
-miServidor.inicialitServer();
+ miServidor.inicialitServer(); 
 

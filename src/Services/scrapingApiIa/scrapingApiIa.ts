@@ -1,9 +1,26 @@
 import { chromium, path, rootRaiz, type Page, type BrowserContext } from "../../config/config.js";
 
 export class scrapingApiIa {
-    private page!: Page;
+    private pages: Record<string, Page> = {};
     private context!: BrowserContext;
     private initialized: boolean = false;
+
+    private configIA = {
+        "DeepSeek": {
+            url: process.env.URLdeepseek,
+            selectorInput: "placeholder",
+            valorSelector: 'Mensaje a DeepSeek',
+            altValorSelector: 'Message DeepSeek',
+            selectorRespuesta: '.ds-markdown'
+        },
+        "Gemini": {
+            url: process.env.URLGEMINI,
+            selectorInput: "label",
+            valorSelector: 'Introduce una petición para Gemini',
+            altValorSelector: 'Pregunta a Gemini',
+            selectorRespuesta: '.markdown'
+        }
+    };
 
     async iniciarPlaywright() {
         if (this.initialized) return;
@@ -17,8 +34,12 @@ export class scrapingApiIa {
                 viewport: { width: 1280, height: 720 }
             });
 
-            this.page = this.context.pages()[0] || await this.context.newPage();
-            await this.page.goto(process.env.URLdeepseek!);
+            this.pages["DeepSeek"] = this.context.pages()[0] || await this.context.newPage();
+            await this.pages["DeepSeek"].goto(this.configIA["DeepSeek"].url);
+
+            this.pages["Gemini"] = await this.context.newPage();
+            await this.pages["Gemini"].goto(this.configIA["Gemini"].url);
+
             this.initialized = true;
             console.log(`[System] Navegador persistente listo.`);
         } catch (err) {
@@ -28,56 +49,67 @@ export class scrapingApiIa {
         }
     }
 
-    async consultarIadeepseek(consulta: string) {
+    async consultarIa(proveedor: "DeepSeek" | "Gemini", consulta: string) {
         try {
             await this.iniciarPlaywright();
-            return await this.ejecutarConsultadeepseek(consulta);
+            const config = this.configIA[proveedor];
+            const page = this.pages[proveedor];
+
+            if (!page) throw new Error("Proveedor no inicializado");
+
+            return await this.ejecutarConsultaGenerica(page, consulta, config);
         } catch (err) {
-            console.error("Error en flujo:", err);
-            return "Error al procesar la consulta.";
+            console.error(`Error en flujo ${proveedor}:`, err);
+            return `Error al procesar la consulta en ${proveedor}.`;
         }
     }
 
-    private async ejecutarConsultadeepseek(consulta: string) {
+    private async ejecutarConsultaGenerica(page: Page, consulta: string, config: any) {
         try {
-            const inputChat = this.page.getByPlaceholder('Mensaje a DeepSeek').or(this.page.getByPlaceholder("Message DeepSeek"));
+            let inputChat;
+
+            if (config.selectorInput === "placeholder") {
+                inputChat = page.getByPlaceholder(config.valorSelector)
+                    .or(page.getByPlaceholder(config.altValorSelector));
+            } else if (config.selectorInput === "label") {
+                inputChat = page.getByLabel(config.valorSelector)
+                    .or(page.getByLabel(config.altValorSelector));
+            } else {
+
+                inputChat = page.locator(config.valorSelector);
+            }
             await inputChat.waitFor({ state: 'visible', timeout: 10000 });
 
-            const selector = '.ds-markdown';
-            const ultimoAntes = this.page.locator(selector).last();
+            const selector = config.selectorRespuesta;
+            const ultimoAntes = page.locator(selector).last();
             let contenidoViejo = (await ultimoAntes.count() > 0) ? await ultimoAntes.innerText() : "";
 
             await inputChat.fill(consulta);
-            await this.page.keyboard.press('Enter');
+            await page.keyboard.press('Enter');
 
-            const respuestaLocator = this.page.locator(selector).last();
+            const respuestaLocator = page.locator(selector).last();
 
-            await this.page.waitForFunction((args) => {
+            await page.waitForFunction((args) => {
                 const msgs = document.querySelectorAll(args.sel);
                 const last = msgs.length > 0 ? (msgs[msgs.length - 1] as HTMLElement).innerText : "";
                 return last !== args.old && last.length > 0;
-            }, { sel: selector, old: contenidoViejo }, { timeout: 40000 });
+            }, { sel: selector, old: contenidoViejo }, { timeout: 45000 });
 
             let textoActual = await respuestaLocator.innerText();
             let textoAnterior = "";
             while (textoActual !== textoAnterior || textoActual === "") {
                 textoAnterior = textoActual;
-                await this.page.waitForTimeout(1000);
+                await page.waitForTimeout(1000);
                 textoActual = await respuestaLocator.innerText();
             }
+            console.log(await this.limpiarMarkdown(respuestaLocator));
             return await this.limpiarMarkdown(respuestaLocator);
+
         } catch (err) {
-            await this.page.reload();
+            await page.reload();
             throw err;
         }
     }
-
-
-
-
-
-
-
 
     private async limpiarMarkdown(locator: any): Promise<string> {
         return await locator.evaluate((container: HTMLElement) => {
@@ -139,4 +171,12 @@ export class scrapingApiIa {
                 .trim();
         });
     }
+
+
+
+
 }
+
+
+
+

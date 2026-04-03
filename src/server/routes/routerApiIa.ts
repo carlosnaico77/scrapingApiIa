@@ -12,8 +12,8 @@ export class routerApiIa {
         this.router.post("/consultar", async (req, res) => {
             try {
                 const { agente, consulta } = req.body;
-                if (agente === "DeepSeek") {
-                    const respuesta = await this.botService.consultarIadeepseek(consulta);
+                if (agente === "DeepSeek" || agente === "Gemini") {
+                    const respuesta = await this.botService.consultarIa(agente, consulta);
                     return res.status(200).json({ message: respuesta });
                 }
                 res.status(404).json({ message: "Agente no soportado" });
