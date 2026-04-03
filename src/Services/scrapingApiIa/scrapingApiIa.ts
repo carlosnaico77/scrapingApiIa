@@ -102,7 +102,7 @@ export class scrapingApiIa {
                 await page.waitForTimeout(1000);
                 textoActual = await respuestaLocator.innerText();
             }
-            console.log(await this.limpiarMarkdown(respuestaLocator));
+
             return await this.limpiarMarkdown(respuestaLocator);
 
         } catch (err) {
