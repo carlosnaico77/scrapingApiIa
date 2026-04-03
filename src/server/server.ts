@@ -1,31 +1,37 @@
-import { compression, express, helmet, morgan, queue } from "../config/config.js"
-import { routerApiIa } from "./routes/routerApiIa.js";
-
-const routerApi = new routerApiIa()
+import { express, helmet, morgan, compression, queue } from "../config/config.js";
+import type { routerApiIa } from "./routes/routerApiIa.js";
+import type { scrapingApiIa } from "../Services/scrapingApiIa/scrapingApiIa.js";
 
 export class server {
-
     private app = express();
-    private port = process.env.PORT
+    private port = process.env.PORT || 3500;
 
-    private middlewares(): void {
+    constructor(private botService: scrapingApiIa, private routerApi: routerApiIa) { }
+
+    private middlewares() {
         this.app.use(morgan("dev"));
         this.app.use(express.json());
         this.app.use(helmet());
         this.app.use(compression());
     }
 
-    private routerApiIa() {
+    private setupRoutes() {
         const servidorEnFila = queue({ activeLimit: 1, queuedLimit: -1 });
-        this.app.use("/api", servidorEnFila, routerApi.router);
-        
+        this.app.use("/api", servidorEnFila, this.routerApi.router);
     }
 
-    inicialitServer() {
-        this.middlewares()
-        this.routerApiIa()
-        this.app.listen(this.port, () => {
-            console.log(`HTTP escuchando en http://localhost:${this.port}/`)
-        })
+    async inicialitServer() {
+        this.middlewares();
+        this.setupRoutes();
+
+        try {
+            await this.botService.iniciarPlaywright();
+            this.app.listen(this.port, () => {
+                console.log(`[OK] Servidor en http://localhost:${this.port}/`);
+            });
+        } catch (err) {
+            console.error("Fallo al iniciar:", err);
+            process.exit(1);
+        }
     }
 }

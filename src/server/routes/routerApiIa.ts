@@ -1,41 +1,24 @@
-import { Router, type PeticionIA } from "../../config/config.js"
-import { scrapingApiIa } from "../../Services/scrapingApiIa/scrapingApiIa.js"
-
-const apiIaScraping = new scrapingApiIa();
+import { Router } from "../../config/config.js";
+import type { scrapingApiIa } from "../../Services/scrapingApiIa/scrapingApiIa.js";
 
 export class routerApiIa {
-    router = Router();
-    constructor() {
-        this.initializeRoutes()
+    public router = Router();
+
+    constructor(private botService: scrapingApiIa) {
+        this.initializeRoutes();
     }
+
     private initializeRoutes() {
         this.router.post("/consultar", async (req, res) => {
             try {
-                const { agente, consulta } = req.body as PeticionIA;
-
-
-                if (!agente) {
-                    return res.status(400).json({ error: "No seleccionaste ningún agente válido" });
+                const { agente, consulta } = req.body;
+                if (agente === "DeepSeek") {
+                    const respuesta = await this.botService.consultarIadeepseek(consulta);
+                    return res.status(200).json({ status: 200, message: respuesta });
                 }
-                if (!consulta) {
-                    return res.status(400).json({ error: "No enviaste ninguna consulta" });
-                }
-
-                switch (agente) {
-                    case "DeepSeek":
-
-                        const respuestaApi = await apiIaScraping.consultarIadeepseek(consulta);
-                        return res.status(200).json({ status: 200, message: respuestaApi });
-
-                    default:
-                        return res.status(404).json({
-                            status: 404,
-                            message: "En este momento no contamos con ese proveedor"
-                        });
-                }
+                res.status(404).json({ message: "Agente no soportado" });
             } catch (error) {
-                console.error("Error en el router:", error);
-                return res.status(500).json({ error: "Hubo un problema al procesar tu consulta" });
+                res.status(500).json({ error: "Error interno" });
             }
         });
     }
