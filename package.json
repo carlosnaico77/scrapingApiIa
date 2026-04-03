@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsc && node dist/index.js"
+    "dev": "tsc && node dist/index.js",
+    "tunel": "cloudflared tunnel --url http://localhost:3500"
   },
   "keywords": [],
   "author": "Carlos Lozano Y Jhonatan Ramirez",
@@ -20,6 +21,7 @@
     "npm": "^11.12.1"
   },
   "dependencies": {
+    "cloudflared": "^0.7.1",
     "compression": "^1.8.1",
     "express": "^5.2.1",
     "express-queue": "^0.0.13",

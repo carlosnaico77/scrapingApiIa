@@ -14,7 +14,7 @@ export class routerApiIa {
                 const { agente, consulta } = req.body;
                 if (agente === "DeepSeek") {
                     const respuesta = await this.botService.consultarIadeepseek(consulta);
-                    return res.status(200).json({ status: 200, message: respuesta });
+                    return res.status(200).json({ message: respuesta });
                 }
                 res.status(404).json({ message: "Agente no soportado" });
             } catch (error) {
