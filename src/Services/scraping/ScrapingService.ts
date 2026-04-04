@@ -1,5 +1,6 @@
 import { chromium, path, rootRaiz, type Page, type BrowserContext } from "../../config/config.js";
 import { limpiarMarkdown } from "../utils/funcionesGenericas.js";
+import { extraerHistorialDeepSeek } from "./providers/DeepSeek.js";
 import { GeminiProvider } from "./providers/Gemini.js";
 
 export class ScrapingService {
@@ -122,6 +123,10 @@ export class ScrapingService {
 
             if (ia === "Gemini") {
                 return await GeminiProvider.extraerHistorial(page);
+            }
+            
+            if (ia === "DeepSeek") {
+                return await extraerHistorialDeepSeek(page);
             }
 
             return [];

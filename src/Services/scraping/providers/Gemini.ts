@@ -3,8 +3,22 @@ import type { conversationData } from "../../../interfaces/ia.interfaces.js";
 
 export class GeminiProvider {
     static async extraerHistorial(page: Page): Promise<Record<number, conversationData[]>> {
+
+        const selectorContenedor = '.sidenav-with-history-container';
+        const selectorBotónMenu = 'button[data-test-id="side-nav-menu-button"]';
         const containerSelector = 'div[id^="conversations-list-"]';
+        
         try {
+            const estaCerrado = await page.evaluate((sel: string) => {
+                const contenedor = document.querySelector(sel);
+                return contenedor ? contenedor.classList.contains('collapsed') : false;
+            }, selectorContenedor);
+
+            if (estaCerrado) {
+                await page.click(selectorBotónMenu);
+                await page.waitForSelector(`${selectorContenedor}.expanded`);
+            }
+            
             await page.waitForSelector(containerSelector, { timeout: 7000 });
             return await page.locator(containerSelector).evaluateAll((listNodes) => {
                 const agrupado: Record<number, any[]> = {};
@@ -16,7 +30,7 @@ export class GeminiProvider {
                         const titleEl = node.querySelector('.conversation-title') as HTMLElement | null;
                         const href = link?.getAttribute('href') ?? '';
                         const idMatch = href.match(/\/app\/([a-zA-Z0-9]+)/);
-                        
+
                         (agrupado[listNumber] ??= []).push({
                             id: idMatch ? idMatch[1] : '',
                             title: titleEl?.innerText.replace(/\s+/g, ' ').trim() || 'Sin título',

@@ -34,7 +34,7 @@ export class RouterApiIa {
                 return res.status(200).json({
                     success: true,
                     ia: final,
-                    total: totalConversaciones, 
+                    total: totalConversaciones,
                     data: data
                 });
 
