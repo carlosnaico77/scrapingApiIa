@@ -1,13 +1,53 @@
 import type { Page } from "../../../config/config.js";
-import type { conversationData } from "../../../interfaces/ia.interfaces.js";
+import { limpiarMarkdown } from "../../utils/funcionesGenericas.js";
+import type { IIAProvider, HistoryGrouped } from "../../../interfaces/ia.interfaces.js";
 
-export class GeminiProvider {
-    static async extraerHistorial(page: Page): Promise<Record<number, conversationData[]>> {
+export class GeminiProvider implements IIAProvider {
+    public readonly url = process.env.URLGEMINI!;
+    async consultar(page: Page, consulta: string): Promise<string> {
+        const selectorRespuesta = '.markdown';
+        const labelPrincipal = 'Introduce una petición para Gemini';
+        const labelAlt = 'Pregunta a Gemini';
+
+        try {
+            const inputChat = page.getByLabel(labelPrincipal).or(page.getByLabel(labelAlt));
+            await inputChat.waitFor({ state: 'visible', timeout: 10000 });
+
+            const ultimoAntes = page.locator(selectorRespuesta).last();
+            let contenidoViejo = (await ultimoAntes.count() > 0) ? await ultimoAntes.innerText() : "";
+
+            await inputChat.fill(consulta);
+            await page.keyboard.press('Enter');
+
+            await page.waitForFunction((args) => {
+                const msgs = document.querySelectorAll(args.sel);
+                const last = msgs.length > 0 ? (msgs[msgs.length - 1] as HTMLElement).innerText : "";
+                return last !== args.old && last.length > 0;
+            }, { sel: selectorRespuesta, old: contenidoViejo }, { timeout: 45000 });
+
+            const respuestaLocator = page.locator(selectorRespuesta).last();
+
+            let textoActual = await respuestaLocator.innerText();
+            let textoAnterior = "";
+            while (textoActual !== textoAnterior) {
+                textoAnterior = textoActual;
+                await page.waitForTimeout(1000);
+                textoActual = await respuestaLocator.innerText();
+            }
+
+            return await limpiarMarkdown(respuestaLocator);
+        } catch (err) {
+            await page.reload();
+            throw err;
+        }
+    }
+
+    async extraerHistorial(page: Page): Promise<HistoryGrouped> {
 
         const selectorContenedor = '.sidenav-with-history-container';
         const selectorBotónMenu = 'button[data-test-id="side-nav-menu-button"]';
         const containerSelector = 'div[id^="conversations-list-"]';
-        
+
         try {
             const estaCerrado = await page.evaluate((sel: string) => {
                 const contenedor = document.querySelector(sel);
@@ -18,7 +58,7 @@ export class GeminiProvider {
                 await page.click(selectorBotónMenu);
                 await page.waitForSelector(`${selectorContenedor}.expanded`);
             }
-            
+
             await page.waitForSelector(containerSelector, { timeout: 7000 });
             return await page.locator(containerSelector).evaluateAll((listNodes) => {
                 const agrupado: Record<number, any[]> = {};
@@ -46,3 +86,4 @@ export class GeminiProvider {
         }
     }
 }
+
