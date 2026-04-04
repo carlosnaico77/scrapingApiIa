@@ -127,7 +127,6 @@ export class scrapingApiIa {
             }
 
             if (ia === "Gemini") {
-
                 return await extraerConversacionesGemini(page);
             }
 
