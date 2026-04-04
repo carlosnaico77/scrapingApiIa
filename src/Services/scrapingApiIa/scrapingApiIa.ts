@@ -115,19 +115,24 @@ export class scrapingApiIa {
         }
     }
 
-    async obtenerListaConversaciones(ia: "Gemini" | "DeepSeek"): Promise<conversationDataGemini[]> {
+    
+    async obtenerListaConversaciones(ia: "Gemini" | "DeepSeek"): Promise<Record<number, conversationDataGemini[]> | conversationDataGemini[]> {
         try {
             await this.iniciarPlaywright();
             const page = this.pages[ia];
+
             if (!page) {
                 console.error(`Error: La página para ${ia} no existe.`);
                 return [];
             }
+
             if (ia === "Gemini") {
+                
                 return await extraerConversacionesGemini(page);
             }
 
-            return []
+            return [];
+
         } catch (err) {
             console.error("Error en obtenerListaConversaciones:", err);
             return [];

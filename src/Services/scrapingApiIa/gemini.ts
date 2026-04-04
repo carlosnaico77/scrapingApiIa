@@ -1,44 +1,58 @@
 import type { Page } from "../../config/config.js";
 import type { conversationDataGemini } from "./interfaces.js";
 
-export async function extraerConversacionesGemini(page: Page): Promise<conversationDataGemini[]> {
-    const containerSelector = '#conversations-list-0';
-    const itemSelector = '.conversation-items-container';
+/* En este archivo iran las funciones dirigidas a interactuar con la pagina de Gemini */
+
+export async function extraerConversacionesGemini(page: Page): Promise<Record<number, conversationDataGemini[]>> {
+
+    const containerSelector = 'div[id^="conversations-list-"]';
 
     try {
+        await page.waitForSelector(containerSelector, { timeout: 7000 });
 
-        await page.waitForSelector(containerSelector);
-        const locator = page.locator(`${containerSelector} ${itemSelector}`);
-        const count = await locator.count();
+        const containers = page.locator(containerSelector);
 
+        return await containers.evaluateAll((listNodes) => {
+            // Usamos el tipo exacto para evitar errores de TS
+            const agrupado: Record<number, any[]> = {};
 
-        if (count === 0) {
-            return [];
-        }
+            listNodes.forEach((listNode) => {
+                // 1. Extraemos el número del bloque (0, 1, 4, etc.)
+                const listId = listNode.id;
+                const listNumber = parseInt(listId.split('-').pop() || '0');
 
+                // 2. Inicializamos el array para este grupo si no existe (Adiós error ts(2532))
+                if (!agrupado[listNumber]) {
+                    agrupado[listNumber] = [];
+                }
 
-        return await page.locator(`${containerSelector} .conversation-items-container`).evaluateAll((nodes) => {
+                // 3. Buscamos los items dentro de este contenedor específico
+                const items = listNode.querySelectorAll('.conversation-items-container');
 
-            return nodes.map((node) => {
-                const link = node.querySelector('a[data-test-id="conversation"]') as HTMLAnchorElement | null;
-                const titleEl = node.querySelector('.conversation-title') as HTMLElement | null;
+                items.forEach((node) => {
+                    const link = node.querySelector('a[data-test-id="conversation"]') as HTMLAnchorElement | null;
+                    const titleEl = node.querySelector('.conversation-title') as HTMLElement | null;
 
-                const href = link?.getAttribute('href') ?? '';
-                const idMatch = href.match(/\/app\/([a-zA-Z0-9]+)/);
-                const rawTitle: string = titleEl?.innerText ?? 'Sin título';
-                const cleanTitle = rawTitle.split('\n')[0]?.trim() ?? 'Sin título';
+                    const href = link?.getAttribute('href') ?? '';
+                    const idMatch = href.match(/\/app\/([a-zA-Z0-9]+)/);
+                    const rawTitle = titleEl?.innerText ?? 'Sin título';
+                    const cleanTitle = rawTitle.replace(/\s+/g, ' ').trim();
 
-                return {
-                    id: idMatch ? (idMatch[1] || '') : '',
-                    title: cleanTitle || 'Sin título',
-                    url: href
-
-                };
+                    // 4. Guardamos en el grupo correspondiente
+                    (agrupado[listNumber] ??= []).push({
+                        id: idMatch ? idMatch[1] : '',
+                        title: cleanTitle || 'Sin título',
+                        url: href,
+                        listGroup: listNumber
+                    });
+                });
             });
+
+            return agrupado;
         });
 
     } catch (error) {
-        console.warn('No se detectó la lista de conversaciones o está vacía.');
-        return [];
+        console.warn('No se detectó el historial o la estructura cambió.');
+        return {};
     }
 }

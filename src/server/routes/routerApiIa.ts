@@ -25,32 +25,17 @@ export class routerApiIa {
         this.router.get("/conversaciones/:ia", async (req, res) => {
             const { ia } = req.params;
 
-
-            if (ia !== "Gemini" && ia !== "DeepSeek") {
-                return res.status(400).json({
-                    success: false,
-                    message: "IA no soportada. Use 'Gemini' o 'DeepSeek'."
-                });
-            }
-
             try {
+               
+                const data = await this.botService.obtenerListaConversaciones(ia as "Gemini");
 
-                const conversaciones = await this.botService.obtenerListaConversaciones(ia as "Gemini" | "DeepSeek");
-
-
-                return res.status(200).json({
+               return res.status(200).json({
                     success: true,
                     ia: ia,
-                    count: conversaciones.length,
-                    data: conversaciones
+                    data: data
                 });
-
             } catch (error: any) {
-                console.error(`Error al obtener conversaciones de ${ia}:`, error);
-                return res.status(500).json({
-                    success: false,
-                    message: "Error interno al extraer el historial."
-                });
+                return res.status(500).json({ success: false, error: error.message });
             }
         });
     }
