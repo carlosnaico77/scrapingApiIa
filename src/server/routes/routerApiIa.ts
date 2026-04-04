@@ -26,10 +26,8 @@ export class routerApiIa {
             const { ia } = req.params;
 
             try {
-               
                 const data = await this.botService.obtenerListaConversaciones(ia as "Gemini");
-
-               return res.status(200).json({
+                return res.status(200).json({
                     success: true,
                     ia: ia,
                     data: data

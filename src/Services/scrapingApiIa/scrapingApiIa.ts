@@ -115,7 +115,7 @@ export class scrapingApiIa {
         }
     }
 
-    
+
     async obtenerListaConversaciones(ia: "Gemini" | "DeepSeek"): Promise<Record<number, conversationDataGemini[]> | conversationDataGemini[]> {
         try {
             await this.iniciarPlaywright();
@@ -127,7 +127,7 @@ export class scrapingApiIa {
             }
 
             if (ia === "Gemini") {
-                
+
                 return await extraerConversacionesGemini(page);
             }
 
