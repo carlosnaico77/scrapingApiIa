@@ -1,16 +1,13 @@
 import { chromium, path, rootRaiz, type Page, type BrowserContext } from "../../config/config.js";
-import { limpiarMarkdown } from "./funcionesGenericas.js";
-import { extraerConversacionesGemini } from "./gemini.js";
-import type { conversationDataGemini } from "./interfaces.js";
+import { limpiarMarkdown } from "../utils/funcionesGenericas.js";
+import { GeminiProvider } from "./providers/Gemini.js";
 
-
-export class scrapingApiIa {
-
+export class ScrapingService {
     private pages: Record<string, Page> = {};
     private context!: BrowserContext;
     private initialized: boolean = false;
 
-    private configIA = {
+    private configIA: any = {
         "DeepSeek": {
             url: process.env.URLdeepseek,
             selectorInput: "placeholder",
@@ -27,7 +24,7 @@ export class scrapingApiIa {
         }
     };
 
-    async iniciarPlaywright() {
+    async iniciar() {
         if (this.initialized) return;
 
         try {
@@ -53,9 +50,9 @@ export class scrapingApiIa {
         }
     }
 
-    async consultarIa(proveedor: "DeepSeek" | "Gemini", consulta: string) {
+    async consultar(proveedor: "DeepSeek" | "Gemini", consulta: string) {
         try {
-            await this.iniciarPlaywright();
+            await this.iniciar();
             const config = this.configIA[proveedor];
             const page = this.pages[proveedor];
 
@@ -74,11 +71,9 @@ export class scrapingApiIa {
 
             if (config.selectorInput === "placeholder") {
                 inputChat = page.getByPlaceholder(config.valorSelector).or(page.getByPlaceholder(config.altValorSelector));
-            } else if (config.selectorInput === "label") { /* Gemini */
+            } else if (config.selectorInput === "label") {
                 inputChat = page.getByLabel(config.valorSelector).or(page.getByLabel(config.altValorSelector));
-
             } else {
-
                 inputChat = page.locator(config.valorSelector);
             }
 
@@ -115,10 +110,9 @@ export class scrapingApiIa {
         }
     }
 
-
-    async obtenerListaConversaciones(ia: "Gemini" | "DeepSeek"): Promise<Record<number, conversationDataGemini[]> | conversationDataGemini[]> {
+    async obtenerConversaciones(ia: "Gemini" | "DeepSeek") {
         try {
-            await this.iniciarPlaywright();
+            await this.iniciar();
             const page = this.pages[ia];
 
             if (!page) {
@@ -127,7 +121,7 @@ export class scrapingApiIa {
             }
 
             if (ia === "Gemini") {
-                return await extraerConversacionesGemini(page);
+                return await GeminiProvider.extraerHistorial(page);
             }
 
             return [];
@@ -138,9 +132,3 @@ export class scrapingApiIa {
         }
     }
 }
-
-
-
-
-
-

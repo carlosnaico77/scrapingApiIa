@@ -1,69 +1,48 @@
 import { Router } from "../../config/config.js";
-import type { scrapingApiIa } from "../../Services/scrapingApiIa/scrapingApiIa.js";
+import { ScrapingService } from "../../Services/scraping/ScrapingService.js";
 
-export class routerApiIa {
+
+export class RouterApiIa {
     public router = Router();
+    constructor(private service: ScrapingService) { this.init(); }
 
-    constructor(private botService: scrapingApiIa) {
-        this.initializeRoutes();
-    }
-
-    private initializeRoutes() {
-
+    private init() {
         this.router.post("/consultar", async (req, res) => {
-            try {
-                let { agente, consulta } = req.body;
-                if (!agente || !consulta || consulta.trim() === "") {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Faltan datos: 'agente' y 'consulta' (no vacía) son obligatorios."
-                    });
-                }
-                const agenteNormalizado = agente.charAt(0).toUpperCase() + agente.slice(1).toLowerCase();
-                const agenteFinal = agenteNormalizado === "Deepseek" ? "DeepSeek" : agenteNormalizado;
-                if (agenteFinal === "DeepSeek" || agenteFinal === "Gemini") {
-                    const respuesta = await this.botService.consultarIa(agenteFinal as "DeepSeek" | "Gemini", consulta.trim());
-                    return res.status(200).json({
-                        success: true,
-                        agente: agenteFinal,
-                        message: respuesta
-                    });
-                }
-                return res.status(404).json({
-                    success: false,
-                    message: `Agente '${agente}' no soportado.`
-                });
+            const { agente, consulta } = req.body;
+            if (!agente || !consulta) return res.status(400).json({ error: "Faltan datos" });
 
-            } catch (error) {
-                console.error("Error en /consultar:", error);
-                return res.status(500).json({
-                    success: false,
-                    error: "Error interno del servidor"
-                });
+            const nombre = agente.charAt(0).toUpperCase() + agente.slice(1).toLowerCase();
+            const final = nombre === "Deepseek" ? "DeepSeek" : nombre;
+
+            if (final === "DeepSeek" || final === "Gemini") {
+                const msg = await this.service.consultar(final as any, consulta);
+                return res.json({ success: true, agente: final, message: msg });
             }
+            res.status(404).json({ error: "IA no soportada" });
         });
 
-
         this.router.get("/conversaciones/:ia", async (req, res) => {
-
-            const iaParam = req.params.ia;
-            const iaNormalizada = iaParam.charAt(0).toUpperCase() + iaParam.slice(1).toLowerCase();
-            const iaFinal = iaNormalizada === "Deepseek" ? "DeepSeek" : iaNormalizada;
-            if (iaFinal !== "Gemini" && iaFinal !== "DeepSeek") {
-                return res.status(400).json({
-                    success: false,
-                    message: "IA no soportada. Use Gemini o DeepSeek."
-                });
-            }
             try {
-                const data = await this.botService.obtenerListaConversaciones(iaNormalizada as "Gemini" | "DeepSeek");
+                const ia = req.params.ia;
+                const nombre = ia.charAt(0).toUpperCase() + ia.slice(1).toLowerCase();
+                const final = nombre === "Deepseek" ? "DeepSeek" : nombre;
+                const data = await this.service.obtenerConversaciones(final as any);
+                const totalConversaciones = Object.values(data).reduce(
+                    (acc: number, grupo: any) => acc + (grupo.length || 0),
+                    0
+                );
                 return res.status(200).json({
                     success: true,
-                    ia: iaNormalizada,
+                    ia: final,
+                    total: totalConversaciones, 
                     data: data
                 });
+
             } catch (error: any) {
-                return res.status(500).json({ success: false, error: error.message });
+                return res.status(500).json({
+                    success: false,
+                    error: error.message
+                });
             }
         });
     }

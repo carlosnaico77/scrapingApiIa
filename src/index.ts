@@ -1,11 +1,11 @@
 import "./config/config.js";
-import { scrapingApiIa } from "./Services/scrapingApiIa/scrapingApiIa.js";
-import { routerApiIa } from "./server/routes/routerApiIa.js";
-import { server } from "./server/server.js";
+import { ScrapingService } from "./Services/scraping/ScrapingService.js";
+import { RouterApiIa } from "./server/routes/routerApiIa.js";
+import { Server } from "./server/server.js";
 
-const bot = new scrapingApiIa();
-const rutas = new routerApiIa(bot);
-const miServidor = new server(bot, rutas);
 
- miServidor.inicialitServer(); 
+const service = new ScrapingService();
+const routes = new RouterApiIa(service);
+const app = new Server(service, routes);
 
+app.start();

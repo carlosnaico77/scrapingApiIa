@@ -15,4 +15,4 @@ const __dirname = dirname(__filename);
 export const rootRaiz = path.join(__dirname, "../../");
 
 export { chromium, path, express, Router, helmet, morgan, compression, queue };
-export type { Page, BrowserContext,Locator };
+export type { Page, BrowserContext, Locator };
