@@ -41,12 +41,14 @@ export class DeepSeekProvider implements IIAProvider {
         try {
 
             if (idConversacion && idConversacion.trim() !== "") {
-                const urlDestino = `${this.url}/chat/${idConversacion}`;
+                
+                const urlDestino = `${this.url}/a/chat/s/${idConversacion}`;
+
                 if (!page.url().includes(idConversacion)) {
                     await page.goto(urlDestino, { waitUntil: 'networkidle' });
                 }
             } else {
-
+                // Para chat nuevo, la raíz suele ser suficiente
                 if (page.url().includes('/chat/')) {
                     await page.goto(`${this.url}/`, { waitUntil: 'networkidle' });
                 }
