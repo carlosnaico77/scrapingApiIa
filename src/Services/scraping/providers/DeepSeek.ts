@@ -9,8 +9,8 @@ const SELECTORES = {
     panelSidebar: '.b8812f16',
     botonAbrirSidebar: '.ds-icon-button',
     itemChat: 'a[href*="/chat/"]',
-    // Botón para adjuntar archivos (imagen/PDF) en el área de input
-    botonSubirArchivo: 'button[aria-label*="Attach"]',
+    // Input de archivo oculto — Playwright puede escribir en él sin hacer click
+    inputArchivo: 'input[type="file"]',
 } as const;
 
 const PLACEHOLDERS = {
@@ -130,14 +130,10 @@ export class DeepSeekProvider implements IIAProvider {
                 .or(page.getByPlaceholder(PLACEHOLDERS.alternativo));
             await inputChat.waitFor({ state: 'visible', timeout: TIMEOUTS.esperarInput });
 
-            // Abrir el file chooser via el botón de adjuntar
-            const [fileChooser] = await Promise.all([
-                page.waitForEvent('filechooser', { timeout: TIMEOUTS.esperarInput }),
-                page.locator(SELECTORES.botonSubirArchivo).first().click(),
-            ]);
-            await fileChooser.setFiles(rutaArchivo);
+            // Playwright puede escribir en input[type="file"] aunque esté oculto
+            await page.locator(SELECTORES.inputArchivo).first().setInputFiles(rutaArchivo);
 
-            // Esperar que el archivo aparezca como adjunto en el UI
+            // Esperar que el archivo aparezca procesado en el UI
             await page.waitForTimeout(1500);
 
             const ultimoAntes = page.locator(SELECTORES.respuesta).last();

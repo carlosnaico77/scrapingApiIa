@@ -12,8 +12,8 @@ const SELECTORES = {
     itemConversacion: '.conversation-items-container',
     linkConversacion: 'a[data-test-id="conversation"]',
     tituloConversacion: '.conversation-title',
-    // Botón para adjuntar archivos (imagen/PDF) en el área de input
-    botonSubirArchivo: 'button[data-test-id="upload-files-button"]',
+    // Input de archivo oculto — Playwright puede escribir en él sin hacer click
+    inputArchivo: 'input[type="file"]',
 } as const;
 
 const LABELS = {
@@ -131,14 +131,10 @@ export class GeminiProvider implements IIAProvider {
                 .or(page.getByLabel(LABELS.alternativo));
             await inputChat.waitFor({ state: 'visible', timeout: TIMEOUTS.esperarInput });
 
-            // Abrir el file chooser via el botón de adjuntar
-            const [fileChooser] = await Promise.all([
-                page.waitForEvent('filechooser', { timeout: TIMEOUTS.esperarInput }),
-                page.locator(SELECTORES.botonSubirArchivo).first().click(),
-            ]);
-            await fileChooser.setFiles(rutaArchivo);
+            // Playwright puede escribir en input[type="file"] aunque esté oculto
+            await page.locator(SELECTORES.inputArchivo).first().setInputFiles(rutaArchivo);
 
-            // Esperar que el archivo aparezca como adjunto en el UI
+            // Esperar que el archivo aparezca procesado en el UI
             await page.waitForTimeout(1500);
 
             const ultimoAntes = page.locator(SELECTORES.respuesta).last();
