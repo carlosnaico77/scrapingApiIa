@@ -1,32 +1,22 @@
 import { chromium, path, rootRaiz, type Page, type BrowserContext } from "../../config/config.js";
-import { limpiarMarkdown } from "../utils/funcionesGenericas.js";
-import { GeminiProvider } from "./providers/Gemini.js";
+import type { IAProviderName, HistoryGrouped, IIAProvider } from "../../interfaces/ia.interfaces.js";
 
 export class ScrapingService {
-    private pages: Record<string, Page> = {};
+
+    private pages: Partial<Record<IAProviderName, Page>> = {};
     private context!: BrowserContext;
     private initialized: boolean = false;
+    private readonly providers: Record<IAProviderName, IIAProvider>;
 
-    private configIA: any = {
-        "DeepSeek": {
-            url: process.env.URLdeepseek,
-            selectorInput: "placeholder",
-            valorSelector: 'Mensaje a DeepSeek',
-            altValorSelector: 'Message DeepSeek',
-            selectorRespuesta: '.ds-markdown'
-        },
-        "Gemini": {
-            url: process.env.URLGEMINI,
-            selectorInput: "label",
-            valorSelector: 'Introduce una petición para Gemini',
-            altValorSelector: 'Pregunta a Gemini',
-            selectorRespuesta: '.markdown'
-        }
-    };
+    constructor(private geminiProvider: IIAProvider, private deepSeekProvider: IIAProvider) {
+        this.providers = {
+            "DeepSeek": this.deepSeekProvider,
+            "Gemini": this.geminiProvider
+        };
+    }
 
     async iniciar() {
         if (this.initialized) return;
-
         try {
             const userPath = path.join(rootRaiz, "auth");
             this.context = await chromium.launchPersistentContext(userPath, {
@@ -35,100 +25,41 @@ export class ScrapingService {
                 args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
             });
 
-            this.pages["DeepSeek"] = this.context.pages()[0] || await this.context.newPage();
-            await this.pages["DeepSeek"].goto(this.configIA["DeepSeek"].url);
-
-            this.pages["Gemini"] = await this.context.newPage();
-            await this.pages["Gemini"].goto(this.configIA["Gemini"].url);
+            for (const [name, provider] of Object.entries(this.providers)) {
+                const iaName = name as IAProviderName;
+                this.pages[iaName] = await this.context.newPage();
+                await this.pages[iaName]!.goto(provider.url);
+            }
 
             this.initialized = true;
-            console.log(`[System] Navegador persistente listo.`);
         } catch (err) {
             console.error(`Error al iniciar navegador:`, err);
-            this.initialized = false;
             throw err;
         }
     }
 
-    async consultar(proveedor: "DeepSeek" | "Gemini", consulta: string) {
+
+    async consultar(proveedor: IAProviderName, consulta: string): Promise<string> {
+        await this.iniciar();
+        const page = this.pages[proveedor];
+        if (!page) throw new Error(`Página de ${proveedor} no inicializada`);
         try {
-            await this.iniciar();
-            const config = this.configIA[proveedor];
-            const page = this.pages[proveedor];
-
-            if (!page) throw new Error("Proveedor no inicializado");
-
-            return await this.ejecutarConsultaGenerica(page, consulta, config);
-        } catch (err) {
-            console.error(`Error en flujo ${proveedor}:`, err);
-            return `Error al procesar la consulta en ${proveedor}.`;
+            return await this.providers[proveedor].consultar(page, consulta);
+        } catch (error: any) {
+            console.error(`[ScrapingService] Error en proveedor ${proveedor}:`, error.message);
+            throw new Error(`El servicio de ${proveedor} no responde correctamente en este momento.`);
         }
     }
 
-    private async ejecutarConsultaGenerica(page: Page, consulta: string, config: any) {
-        try {
-            let inputChat;
-
-            if (config.selectorInput === "placeholder") {
-                inputChat = page.getByPlaceholder(config.valorSelector).or(page.getByPlaceholder(config.altValorSelector));
-            } else if (config.selectorInput === "label") {
-                inputChat = page.getByLabel(config.valorSelector).or(page.getByLabel(config.altValorSelector));
-            } else {
-                inputChat = page.locator(config.valorSelector);
-            }
-
-            await inputChat.waitFor({ state: 'visible', timeout: 10000 });
-
-            const selector = config.selectorRespuesta;
-            const ultimoAntes = page.locator(selector).last();
-            let contenidoViejo = (await ultimoAntes.count() > 0) ? await ultimoAntes.innerText() : "";
-
-            await inputChat.fill(consulta);
-            await page.keyboard.press('Enter');
-
-            const respuestaLocator = page.locator(selector).last();
-
-            await page.waitForFunction((args) => {
-                const msgs = document.querySelectorAll(args.sel);
-                const last = msgs.length > 0 ? (msgs[msgs.length - 1] as HTMLElement).innerText : "";
-                return last !== args.old && last.length > 0;
-            }, { sel: selector, old: contenidoViejo }, { timeout: 45000 });
-
-            let textoActual = await respuestaLocator.innerText();
-            let textoAnterior = "";
-            while (textoActual !== textoAnterior || textoActual === "") {
-                textoAnterior = textoActual;
-                await page.waitForTimeout(1000);
-                textoActual = await respuestaLocator.innerText();
-            }
-
-            return await limpiarMarkdown(respuestaLocator);
-
-        } catch (err) {
-            await page.reload();
-            throw err;
-        }
-    }
-
-    async obtenerConversaciones(ia: "Gemini" | "DeepSeek") {
+    async obtenerConversaciones(ia: IAProviderName): Promise<HistoryGrouped> {
         try {
             await this.iniciar();
             const page = this.pages[ia];
-
-            if (!page) {
-                console.error(`Error: La página para ${ia} no existe.`);
-                return [];
-            }
-
-            if (ia === "Gemini") {
-                return await GeminiProvider.extraerHistorial(page);
-            }
-
-            return [];
-
-        } catch (err) {
-            console.error("Error en obtenerListaConversaciones:", err);
-            return [];
+            if (!page) return {};
+            return await this.providers[ia].extraerHistorial(page);
+        } catch (error: any) {
+            console.error(`[ScrapingService] Fallo al extraer historial de ${ia}:`, error.message);
+            return {};
         }
     }
 }
