@@ -1,11 +1,13 @@
 import { chromium, path, rootRaiz, type Page, type BrowserContext } from "../../config/config.js";
+import { limpiarMarkdown } from "../utils/funcionesGenericas.js";
+import { GeminiProvider } from "./providers/Gemini.js";
 
-export class scrapingApiIa {
+export class ScrapingService {
     private pages: Record<string, Page> = {};
     private context!: BrowserContext;
     private initialized: boolean = false;
 
-    private configIA = {
+    private configIA: any = {
         "DeepSeek": {
             url: process.env.URLdeepseek,
             selectorInput: "placeholder",
@@ -22,7 +24,7 @@ export class scrapingApiIa {
         }
     };
 
-    async iniciarPlaywright() {
+    async iniciar() {
         if (this.initialized) return;
 
         try {
@@ -31,7 +33,6 @@ export class scrapingApiIa {
                 headless: false,
                 channel: "chrome",
                 args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-                viewport: { width: 1280, height: 720 }
             });
 
             this.pages["DeepSeek"] = this.context.pages()[0] || await this.context.newPage();
@@ -49,9 +50,9 @@ export class scrapingApiIa {
         }
     }
 
-    async consultarIa(proveedor: "DeepSeek" | "Gemini", consulta: string) {
+    async consultar(proveedor: "DeepSeek" | "Gemini", consulta: string) {
         try {
-            await this.iniciarPlaywright();
+            await this.iniciar();
             const config = this.configIA[proveedor];
             const page = this.pages[proveedor];
 
@@ -69,15 +70,13 @@ export class scrapingApiIa {
             let inputChat;
 
             if (config.selectorInput === "placeholder") {
-                inputChat = page.getByPlaceholder(config.valorSelector)
-                    .or(page.getByPlaceholder(config.altValorSelector));
+                inputChat = page.getByPlaceholder(config.valorSelector).or(page.getByPlaceholder(config.altValorSelector));
             } else if (config.selectorInput === "label") {
-                inputChat = page.getByLabel(config.valorSelector)
-                    .or(page.getByLabel(config.altValorSelector));
+                inputChat = page.getByLabel(config.valorSelector).or(page.getByLabel(config.altValorSelector));
             } else {
-
                 inputChat = page.locator(config.valorSelector);
             }
+
             await inputChat.waitFor({ state: 'visible', timeout: 10000 });
 
             const selector = config.selectorRespuesta;
@@ -103,7 +102,7 @@ export class scrapingApiIa {
                 textoActual = await respuestaLocator.innerText();
             }
 
-            return await this.limpiarMarkdown(respuestaLocator);
+            return await limpiarMarkdown(respuestaLocator);
 
         } catch (err) {
             await page.reload();
@@ -111,72 +110,25 @@ export class scrapingApiIa {
         }
     }
 
-    private async limpiarMarkdown(locator: any): Promise<string> {
-        return await locator.evaluate((container: HTMLElement) => {
-            const renderers: Record<string, (el: HTMLElement) => string> = {
-                'P': (el) => el.textContent?.trim() || "",
-                'H1': (el) => `\n# ${el.textContent?.trim().toUpperCase()}\n`,
-                'H2': (el) => `\n## ${el.textContent?.trim().toUpperCase()}\n`,
-                'H3': (el) => `\n### ${el.textContent?.trim().toUpperCase()}\n`,
-                'PRE': (el) => `\n\`\`\`\n${el.textContent?.trim()}\n\`\`\`\n`,
-                'BLOCKQUOTE': (el) => `> ${el.textContent?.trim()}`,
-                'HR': () => '\n---\n',
-                'UL': (el) => Array.from(el.querySelectorAll('li'))
-                    .map(li => `- ${li.textContent?.trim()}`).join('\n'),
-                'OL': (el) => Array.from(el.querySelectorAll('li'))
-                    .map((li, i) => `${i + 1}. ${li.textContent?.trim()}`).join('\n'),
-                'TABLE': (el) => {
-                    const rows = Array.from(el.querySelectorAll('tr')) as HTMLTableRowElement[];
-                    if (rows.length === 0) return "";
+    async obtenerConversaciones(ia: "Gemini" | "DeepSeek") {
+        try {
+            await this.iniciar();
+            const page = this.pages[ia];
 
-                    const markdownRows = rows.map(tr => {
-                        const cells = Array.from(tr.querySelectorAll('th, td'));
-                        return `| ${cells.map(c => c.textContent?.trim() || " ").join(' | ')} |`;
-                    });
+            if (!page) {
+                console.error(`Error: La página para ${ia} no existe.`);
+                return [];
+            }
 
-                    const firstRowCells = rows[0]?.querySelectorAll('th, td');
-                    const columnCount = firstRowCells?.length || 0;
-                    const separator = `| ${Array(columnCount).fill('---').join(' | ')} |`;
+            if (ia === "Gemini") {
+                return await GeminiProvider.extraerHistorial(page);
+            }
 
-                    markdownRows.splice(1, 0, separator);
-                    return `\n${markdownRows.join('\n')}\n`;
-                }
-            };
+            return [];
 
-            const procesar = (el: HTMLElement): string => {
-                const handler = renderers[el.tagName];
-                if (handler) return handler(el);
-
-                if (el.children.length > 0 && !['P', 'H1', 'H2', 'H3', 'LI'].includes(el.tagName)) {
-                    return Array.from(el.children)
-                        .map(child => procesar(child as HTMLElement))
-                        .join('\n');
-                }
-                return el.textContent?.trim() || "";
-            };
-
-
-            return Array.from(container.children)
-                .map(child => procesar(child as HTMLElement))
-                .map(text => {
-                    return text
-                        .replace(/[\r\t]/g, '')
-                        .replace(/\xa0/g, ' ')
-                        .replace(/-\d+(-\d+)*/g, '')
-                        .trim();
-                })
-                .filter(text => text.length > 0)
-                .join('\n\n')
-                .replace(/\n{3,}/g, '\n\n')
-                .trim();
-        });
+        } catch (err) {
+            console.error("Error en obtenerListaConversaciones:", err);
+            return [];
+        }
     }
-
-
-
-
 }
-
-
-
-
