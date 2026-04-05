@@ -2,6 +2,8 @@ import { Router, multer } from "../../config/config.js";
 import { ScrapingService } from "../../Services/scraping/ScrapingService.js";
 import type { IAProviderName } from "../../interfaces/ia.interfaces.js";
 import { unlink } from "node:fs/promises";
+import { extname } from "node:path";
+import { mkdirSync } from "node:fs";
 
 const PROVEEDORES_SOPORTADOS: IAProviderName[] = ["DeepSeek", "Gemini"];
 
@@ -9,8 +11,21 @@ const TIPOS_PERMITIDOS = new Set([
     'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
 ]);
 
+// Asegurar que el directorio uploads/ existe
+mkdirSync('uploads', { recursive: true });
+
+// Usar diskStorage para preservar la extensión del archivo original.
+// Sin extensión, Playwright no puede inferir el MIME type y la IA lo trata como binario.
+const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, 'uploads/'),
+    filename: (_req, file, cb) => {
+        const ext = extname(file.originalname) || '.bin';
+        cb(null, `upload-${Date.now()}${ext}`);
+    },
+});
+
 const upload = multer({
-    dest: 'uploads/',
+    storage,
     limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
     fileFilter: (_req, file, cb) => {
         cb(null, TIPOS_PERMITIDOS.has(file.mimetype));

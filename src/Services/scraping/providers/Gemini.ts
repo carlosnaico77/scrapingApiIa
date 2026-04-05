@@ -1,5 +1,5 @@
 import type { Page } from "../../../config/config.js";
-import { limpiarMarkdown } from "../../utils/funcionesGenericas.js";
+import { limpiarMarkdown, subirArchivo } from "../../utils/funcionesGenericas.js";
 import type { IIAProvider, HistoryGrouped } from "../../../interfaces/ia.interfaces.js";
 import { TIMEOUTS } from "../../../config/timeouts.js";
 
@@ -12,8 +12,19 @@ const SELECTORES = {
     itemConversacion: '.conversation-items-container',
     linkConversacion: 'a[data-test-id="conversation"]',
     tituloConversacion: '.conversation-title',
-    // Input de archivo oculto — Playwright puede escribir en él sin hacer click
-    inputArchivo: 'input[type="file"]',
+    // Selectores candidatos para el botón de adjuntar archivo (en orden de prioridad)
+    // Gemini no tiene input[type="file"] en el DOM hasta que se clickea el botón
+    botonesUpload: [
+        'button[data-test-id="upload-files-button"]',
+        'button[aria-label*="Upload"]',
+        'button[aria-label*="Subir"]',
+        'button[aria-label*="imagen"]',
+        'button[aria-label*="image"]',
+        'button[aria-label*="Adjuntar"]',
+        'button[aria-label*="attach"]',
+        'button[aria-label*="archivo"]',
+        'button[aria-label*="file"]',
+    ],
 } as const;
 
 const LABELS = {
@@ -131,16 +142,18 @@ export class GeminiProvider implements IIAProvider {
                 .or(page.getByLabel(LABELS.alternativo));
             await inputChat.waitFor({ state: 'visible', timeout: TIMEOUTS.esperarInput });
 
-            // Playwright puede escribir en input[type="file"] aunque esté oculto
-            await page.locator(SELECTORES.inputArchivo).first().setInputFiles(rutaArchivo);
+            // Adjuntar archivo (intenta input directo primero, luego filechooser)
+            await subirArchivo(page, rutaArchivo, [...SELECTORES.botonesUpload]);
 
             // Esperar que el archivo aparezca procesado en el UI
-            await page.waitForTimeout(1500);
+            await page.waitForTimeout(2000);
 
             const ultimoAntes = page.locator(SELECTORES.respuesta).last();
             const contenidoViejo = (await ultimoAntes.count() > 0) ? await ultimoAntes.innerText() : "";
 
-            await inputChat.fill(consulta);
+            // Usar click + keyboard.type en lugar de fill() para no perder el adjunto
+            await inputChat.click();
+            await page.keyboard.type(consulta);
             await page.keyboard.press('Enter');
 
             await page.waitForFunction(

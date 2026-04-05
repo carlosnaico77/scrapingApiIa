@@ -1,17 +1,45 @@
 import type { Page } from "../../../config/config.js";
 import type { HistoryGrouped, IIAProvider } from "../../../interfaces/ia.interfaces.js";
-import { limpiarMarkdown } from "../../utils/funcionesGenericas.js";
+import { limpiarMarkdown, subirArchivo } from "../../utils/funcionesGenericas.js";
 import { TIMEOUTS } from "../../../config/timeouts.js";
 
 // Selectores centralizados — fácil de actualizar si DeepSeek cambia su UI
 const SELECTORES = {
+    // Posibles selectores de respuesta en orden de prioridad (DeepSeek cambia sus clases frecuentemente)
+    respuestaCandidatos: [
+        '.ds-markdown',
+        '[class*="markdown"]',
+        '.md',
+        '[class*="message-content"]',
+        '[class*="reply"]',
+        '[class*="response"]',
+        '[class*="assistant"]',
+        '[class*="answer"]',
+        '[class*="chat-message"]',
+        'article',
+    ],
     respuesta: '.ds-markdown',
     panelSidebar: '.b8812f16',
     botonAbrirSidebar: '.ds-icon-button',
     itemChat: 'a[href*="/chat/"]',
-    // Input de archivo oculto — Playwright puede escribir en él sin hacer click
-    inputArchivo: 'input[type="file"]',
+    // Selectores candidatos para el botón de adjuntar archivo (en orden de prioridad)
+    botonesUpload: [
+        'button[aria-label*="Attach"]',
+        'button[aria-label*="Upload"]',
+        'button[aria-label*="adjuntar"]',
+        'button[aria-label*="Adjuntar"]',
+        'label[for*="file"]',
+    ],
 } as const;
+
+/** Detecta en tiempo real qué selector de respuesta existe en la página actual */
+async function resolverSelectorRespuesta(page: Page): Promise<string> {
+    for (const sel of SELECTORES.respuestaCandidatos) {
+        if (await page.locator(sel).count() > 0) return sel;
+    }
+    // Fallback: devuelve el primero aunque no esté presente, la espera lo encontrará
+    return SELECTORES.respuestaCandidatos[0] ?? SELECTORES.respuesta;
+}
 
 const PLACEHOLDERS = {
     principal: 'Mensaje a DeepSeek',
@@ -60,7 +88,8 @@ export class DeepSeekProvider implements IIAProvider {
                 .or(page.getByPlaceholder(PLACEHOLDERS.alternativo));
             await inputChat.waitFor({ state: 'visible', timeout: TIMEOUTS.esperarInput });
 
-            const ultimoAntes = page.locator(SELECTORES.respuesta).last();
+            const selectorRespuesta = await resolverSelectorRespuesta(page);
+            const ultimoAntes = page.locator(selectorRespuesta).last();
             const contenidoViejo = (await ultimoAntes.count() > 0) ? await ultimoAntes.innerText() : "";
 
             await inputChat.fill(consulta);
@@ -73,7 +102,7 @@ export class DeepSeekProvider implements IIAProvider {
                     const last = msgs.length > 0 ? (msgs[msgs.length - 1] as HTMLElement).innerText : "";
                     return last !== args.old && last.length > 0;
                 },
-                { sel: SELECTORES.respuesta, old: contenidoViejo },
+                { sel: selectorRespuesta, old: contenidoViejo },
                 { timeout: TIMEOUTS.esperarRespuesta }
             );
 
@@ -87,11 +116,11 @@ export class DeepSeekProvider implements IIAProvider {
                         const snapshot = last.innerText;
                         setTimeout(() => resolve(last.innerText === snapshot), args.stableMs);
                     }),
-                { sel: SELECTORES.respuesta, stableMs: TIMEOUTS.estabilizarTexto },
+                { sel: selectorRespuesta, stableMs: TIMEOUTS.estabilizarTexto },
                 { timeout: TIMEOUTS.esperarRespuesta }
             );
 
-            const textoFinal = await limpiarMarkdown(page.locator(SELECTORES.respuesta).last());
+            const textoFinal = await limpiarMarkdown(page.locator(selectorRespuesta).last());
             const urlActual = page.url();
             const nuevoId = urlActual.split('/').pop()?.split('?')[0] || "";
 
@@ -107,6 +136,14 @@ export class DeepSeekProvider implements IIAProvider {
                 titulo: titulo ?? "Chat sin título"
             };
         } catch (err) {
+            // Diagnóstico: loguear qué selectores existen para ayudar a actualizar SELECTORES
+            const diag = await page.evaluate(() =>
+                ['.ds-markdown', '[class*="markdown"]', '.md', '[class*="message"]',
+                 '[class*="content"]', '[class*="reply"]', '[class*="assistant"]', 'article']
+                    .map(s => `${s}:${document.querySelectorAll(s).length}`)
+                    .join(' | ')
+            ).catch(() => 'evaluate failed');
+            console.warn(`[DeepSeek] Selectores en página: ${diag}`);
             await page.reload();
             throw err;
         }
@@ -130,16 +167,30 @@ export class DeepSeekProvider implements IIAProvider {
                 .or(page.getByPlaceholder(PLACEHOLDERS.alternativo));
             await inputChat.waitFor({ state: 'visible', timeout: TIMEOUTS.esperarInput });
 
-            // Playwright puede escribir en input[type="file"] aunque esté oculto
-            await page.locator(SELECTORES.inputArchivo).first().setInputFiles(rutaArchivo);
+            // Diagnóstico previo al upload: loguear qué file-inputs y botones existen
+            const diagUpload = await page.evaluate(() => {
+                const inputs = Array.from(document.querySelectorAll('input[type="file"]'))
+                    .map((el, i) => `input[${i}]: accept="${el.getAttribute('accept')}" name="${el.getAttribute('name')}" id="${el.id}"`);
+                const buttons = Array.from(document.querySelectorAll('button[aria-label], [data-testid], [role="button"]'))
+                    .slice(0, 20)
+                    .map(el => `btn: aria="${el.getAttribute('aria-label')}" testid="${el.getAttribute('data-testid')}" class="${el.className.slice(0, 40)}"`);
+                return [...inputs, ...buttons].join('\n');
+            });
+            console.log('[DeepSeek upload diag]\n', diagUpload);
+
+            // Adjuntar archivo (intenta input directo primero, luego filechooser)
+            await subirArchivo(page, rutaArchivo, [...SELECTORES.botonesUpload]);
 
             // Esperar que el archivo aparezca procesado en el UI
-            await page.waitForTimeout(1500);
+            await page.waitForTimeout(2000);
 
-            const ultimoAntes = page.locator(SELECTORES.respuesta).last();
+            const selectorRespuesta = await resolverSelectorRespuesta(page);
+            const ultimoAntes = page.locator(selectorRespuesta).last();
             const contenidoViejo = (await ultimoAntes.count() > 0) ? await ultimoAntes.innerText() : "";
 
-            await inputChat.fill(consulta);
+            // Usar click + keyboard.type en lugar de fill() para no perder el adjunto
+            await inputChat.click();
+            await page.keyboard.type(consulta);
             await page.keyboard.press('Enter');
 
             await page.waitForFunction(
@@ -148,7 +199,7 @@ export class DeepSeekProvider implements IIAProvider {
                     const last = msgs.length > 0 ? (msgs[msgs.length - 1] as HTMLElement).innerText : "";
                     return last !== args.old && last.length > 0;
                 },
-                { sel: SELECTORES.respuesta, old: contenidoViejo },
+                { sel: selectorRespuesta, old: contenidoViejo },
                 { timeout: TIMEOUTS.esperarRespuesta }
             );
 
@@ -161,11 +212,11 @@ export class DeepSeekProvider implements IIAProvider {
                         const snapshot = last.innerText;
                         setTimeout(() => resolve(last.innerText === snapshot), args.stableMs);
                     }),
-                { sel: SELECTORES.respuesta, stableMs: TIMEOUTS.estabilizarTexto },
+                { sel: selectorRespuesta, stableMs: TIMEOUTS.estabilizarTexto },
                 { timeout: TIMEOUTS.esperarRespuesta }
             );
 
-            const textoFinal = await limpiarMarkdown(page.locator(SELECTORES.respuesta).last());
+            const textoFinal = await limpiarMarkdown(page.locator(selectorRespuesta).last());
             const urlActual = page.url();
             const nuevoId = urlActual.split('/').pop()?.split('?')[0] ?? "";
             const titulo = await page.evaluate((sel) => {
@@ -175,6 +226,13 @@ export class DeepSeekProvider implements IIAProvider {
 
             return { texto: textoFinal, id: nuevoId, titulo: titulo ?? "Chat sin título" };
         } catch (err) {
+            const diag = await page.evaluate(() =>
+                ['.ds-markdown', '[class*="markdown"]', '.md', '[class*="message"]',
+                 '[class*="content"]', '[class*="reply"]', '[class*="assistant"]', 'article']
+                    .map(s => `${s}:${document.querySelectorAll(s).length}`)
+                    .join(' | ')
+            ).catch(() => 'evaluate failed');
+            console.warn(`[DeepSeek archivo] Selectores en página: ${diag}`);
             await page.reload();
             throw err;
         }
