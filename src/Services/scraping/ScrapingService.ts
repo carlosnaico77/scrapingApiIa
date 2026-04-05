@@ -51,12 +51,12 @@ export class ScrapingService {
         return this.initialized;
     }
 
-    async consultar(proveedor: IAProviderName, consulta: string): Promise<string> {
+    async consultar(proveedor: IAProviderName, consulta: string, idConversacion?: string): Promise<any> {
         await this.iniciar();
         const page = this.pages[proveedor];
         if (!page) throw new Error(`Página de ${proveedor} no inicializada`);
         try {
-            return await this.providers[proveedor].consultar(page, consulta);
+            return await this.providers[proveedor].consultar(page, consulta, idConversacion);
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error(`[ScrapingService] Error en proveedor ${proveedor}:`, msg);

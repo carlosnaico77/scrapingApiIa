@@ -37,8 +37,20 @@ export class DeepSeekProvider implements IIAProvider {
         }
     }
 
-    async consultar(page: Page, consulta: string): Promise<string> {
+    async consultar(page: Page, consulta: string, idConversacion?: string): Promise<{ texto: string, id: string, titulo: string }> {
         try {
+
+            if (idConversacion && idConversacion.trim() !== "") {
+                const urlDestino = `${this.url}/chat/${idConversacion}`;
+                if (!page.url().includes(idConversacion)) {
+                    await page.goto(urlDestino, { waitUntil: 'networkidle' });
+                }
+            } else {
+
+                if (page.url().includes('/chat/')) {
+                    await page.goto(`${this.url}/`, { waitUntil: 'networkidle' });
+                }
+            }
             const inputChat = page
                 .getByPlaceholder(PLACEHOLDERS.principal)
                 .or(page.getByPlaceholder(PLACEHOLDERS.alternativo));
@@ -75,7 +87,21 @@ export class DeepSeekProvider implements IIAProvider {
                 { timeout: TIMEOUTS.esperarRespuesta }
             );
 
-            return await limpiarMarkdown(page.locator(SELECTORES.respuesta).last());
+            const textoFinal = await limpiarMarkdown(page.locator(SELECTORES.respuesta).last());
+            const urlActual = page.url();
+            const nuevoId = urlActual.split('/').pop()?.split('?')[0] || "";
+
+            // Intentamos sacar el título del sidebar o de la URL
+            const titulo = await page.evaluate((sel) => {
+                const el = document.querySelector(sel);
+                return el ? (el as HTMLElement).innerText.split('\n')[0] : "Chat de DeepSeek";
+            }, SELECTORES.itemChat).catch(() => "Chat de DeepSeek");
+
+            return {
+                texto: textoFinal,
+                id: nuevoId ?? "",
+                titulo: titulo ?? "Chat sin título"
+            };
         } catch (err) {
             await page.reload();
             throw err;

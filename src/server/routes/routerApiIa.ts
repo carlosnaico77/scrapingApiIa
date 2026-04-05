@@ -30,7 +30,7 @@ export class RouterApiIa {
 
         this.router.post("/consultar", async (req, res) => {
             try {
-                const { agente, consulta }: { agente: string; consulta: string } = req.body;
+                const { agente, consulta, idConversacion }: { agente: string; consulta: string; idConversacion?: string } = req.body;
 
                 if (!agente || !consulta) {
                     return res.status(400).json({ error: "Faltan datos" });
@@ -41,8 +41,17 @@ export class RouterApiIa {
                     return res.status(404).json({ error: "IA no soportada" });
                 }
 
-                const msg: string = await this.service.consultar(proveedor, consulta);
-                return res.json({ success: true, agente: proveedor, message: msg });
+
+                const resultado = await this.service.consultar(proveedor, consulta, idConversacion);
+
+                // Retornamos la estructura completa
+                return res.json({
+                    success: true,
+                    agente: proveedor,
+                    message: resultado.texto,
+                    idConversacion: resultado.id,
+                    tituloConversacion: resultado.titulo
+                });
 
             } catch (error: unknown) {
                 const msg = error instanceof Error ? error.message : "Error desconocido";
