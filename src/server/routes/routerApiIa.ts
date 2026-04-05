@@ -9,6 +9,7 @@ export class RouterApiIa {
     constructor(private service: ScrapingService) { this.init(); }
 
     private init() {
+        
         this.router.post("/consultar", async (req, res) => {
             try {
                 const { agente, consulta }: { agente: string, consulta: string } = req.body;

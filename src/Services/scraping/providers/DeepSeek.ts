@@ -5,6 +5,7 @@ import { limpiarMarkdown } from "../../utils/funcionesGenericas.js";
 export class DeepSeekProvider implements IIAProvider {
 
     public readonly url = process.env.URLdeepseek!;
+
     async consultar(page: Page, consulta: string): Promise<string> {
         const selectorRespuesta = '.ds-markdown';
         const placeholderPrincipal = 'Mensaje a DeepSeek';
@@ -45,7 +46,61 @@ export class DeepSeekProvider implements IIAProvider {
     }
 
     async extraerHistorial(page: Page): Promise<HistoryGrouped> {
-        return {};
+        
+        const selectorItemChat = 'a[href*="/chat/"]';
+        const selectorPanel = '.b8812f16'; // El contenedor que subiste en el HTML
+        const selectorBotonAbrir = '.ds-icon-button';
+
+        try {
+            
+            const panel = page.locator(selectorPanel);
+            const estaCerrado = !(await panel.isVisible());
+
+            if (estaCerrado) {
+                const btnAbrir = page.locator(selectorBotonAbrir).first();
+                if (await btnAbrir.count() > 0) {
+                    await btnAbrir.click();
+                    await page.waitForSelector(selectorItemChat, { state: 'attached', timeout: 5000 });
+                }
+            }
+
+           
+            const chats = await page.evaluate((sel) => {
+                const results: any[] = [];
+                const elements = document.querySelectorAll(sel);
+
+                elements.forEach((el, index) => {
+                    if (el instanceof HTMLElement) {
+                        const href = el.getAttribute('href') || '';
+                        
+                        const fullText = el.innerText || '';
+                        const cleanTitle = fullText.split('\n')[0]?.trim() || 'Sin título';
+
+                        results.push({
+                            id: href.split('/').pop() || `ds-${index}`,
+                            title: cleanTitle || 'Sin título',
+                            url: href
+                        });
+                    }
+                });
+                return results;
+            }, selectorItemChat);
+
+           
+            const final: HistoryGrouped = { 0: [] };
+            chats.forEach(chat => {
+                (final[0] ??= []).push({
+                    ...chat,
+                    listGroup: 0
+                });
+            });
+
+            return final;
+
+        } catch (error: any) {
+            console.error(`[DeepSeekProvider] Error al extraer historial:`, error.message);
+            return { 0: [] };
+        }
     }
 }
 
