@@ -1,44 +1,81 @@
 import type { Page } from "../../../config/config.js";
 import type { HistoryGrouped, IIAProvider } from "../../../interfaces/ia.interfaces.js";
 import { limpiarMarkdown } from "../../utils/funcionesGenericas.js";
+import { TIMEOUTS } from "../../../config/timeouts.js";
+
+// Selectores centralizados — fácil de actualizar si DeepSeek cambia su UI
+const SELECTORES = {
+    respuesta: '.ds-markdown',
+    panelSidebar: '.b8812f16',
+    botonAbrirSidebar: '.ds-icon-button',
+    itemChat: 'a[href*="/chat/"]',
+} as const;
+
+const PLACEHOLDERS = {
+    principal: 'Mensaje a DeepSeek',
+    alternativo: 'Message DeepSeek',
+} as const;
 
 export class DeepSeekProvider implements IIAProvider {
 
     public readonly url = process.env.URLdeepseek!;
 
+    async validarSelectores(page: Page): Promise<void> {
+        const criticos: Array<{ nombre: string; selector: string }> = [
+            { nombre: 'respuesta', selector: SELECTORES.respuesta },
+            { nombre: 'itemChat', selector: SELECTORES.itemChat },
+        ];
+        const faltantes = await Promise.all(
+            criticos.map(async ({ nombre, selector }) => {
+                const count = await page.locator(selector).count();
+                return count === 0 ? `${nombre} ("${selector}")` : null;
+            })
+        );
+        const problemas = faltantes.filter(Boolean);
+        if (problemas.length > 0) {
+            console.warn(`[DeepSeekProvider] Selectores no encontrados: ${problemas.join(', ')}`);
+        }
+    }
+
     async consultar(page: Page, consulta: string): Promise<string> {
-        const selectorRespuesta = '.ds-markdown';
-        const placeholderPrincipal = 'Mensaje a DeepSeek';
-        const placeholderAlt = 'Message DeepSeek';
-
         try {
-            const inputChat = page.getByPlaceholder(placeholderPrincipal).or(page.getByPlaceholder(placeholderAlt));
-            await inputChat.waitFor({ state: 'visible', timeout: 10000 });
+            const inputChat = page
+                .getByPlaceholder(PLACEHOLDERS.principal)
+                .or(page.getByPlaceholder(PLACEHOLDERS.alternativo));
+            await inputChat.waitFor({ state: 'visible', timeout: TIMEOUTS.esperarInput });
 
-            const ultimoAntes = page.locator(selectorRespuesta).last();
-            let contenidoViejo = (await ultimoAntes.count() > 0) ? await ultimoAntes.innerText() : "";
+            const ultimoAntes = page.locator(SELECTORES.respuesta).last();
+            const contenidoViejo = (await ultimoAntes.count() > 0) ? await ultimoAntes.innerText() : "";
 
             await inputChat.fill(consulta);
             await page.keyboard.press('Enter');
 
+            // Esperar que aparezca una respuesta nueva (distinta al mensaje anterior)
+            await page.waitForFunction(
+                (args: { sel: string; old: string }) => {
+                    const msgs = document.querySelectorAll(args.sel);
+                    const last = msgs.length > 0 ? (msgs[msgs.length - 1] as HTMLElement).innerText : "";
+                    return last !== args.old && last.length > 0;
+                },
+                { sel: SELECTORES.respuesta, old: contenidoViejo },
+                { timeout: TIMEOUTS.esperarRespuesta }
+            );
 
-            await page.waitForFunction((args) => {
-                const msgs = document.querySelectorAll(args.sel);
-                const last = msgs.length > 0 ? (msgs[msgs.length - 1] as HTMLElement).innerText : "";
-                return last !== args.old && last.length > 0;
-            }, { sel: selectorRespuesta, old: contenidoViejo }, { timeout: 45000 });
+            // Esperar que el texto deje de cambiar (streaming finalizado)
+            await page.waitForFunction(
+                (args: { sel: string; stableMs: number }) =>
+                    new Promise<boolean>((resolve) => {
+                        const els = document.querySelectorAll(args.sel);
+                        const last = els[els.length - 1] as HTMLElement | undefined;
+                        if (!last?.innerText) { resolve(false); return; }
+                        const snapshot = last.innerText;
+                        setTimeout(() => resolve(last.innerText === snapshot), args.stableMs);
+                    }),
+                { sel: SELECTORES.respuesta, stableMs: TIMEOUTS.estabilizarTexto },
+                { timeout: TIMEOUTS.esperarRespuesta }
+            );
 
-
-            const respuestaLocator = page.locator(selectorRespuesta).last();
-            let textoActual = await respuestaLocator.innerText();
-            let textoAnterior = "";
-            while (textoActual !== textoAnterior || textoActual === "") {
-                textoAnterior = textoActual;
-                await page.waitForTimeout(1500);
-                textoActual = await respuestaLocator.innerText();
-            }
-
-            return await limpiarMarkdown(respuestaLocator);
+            return await limpiarMarkdown(page.locator(SELECTORES.respuesta).last());
         } catch (err) {
             await page.reload();
             throw err;
@@ -46,61 +83,47 @@ export class DeepSeekProvider implements IIAProvider {
     }
 
     async extraerHistorial(page: Page): Promise<HistoryGrouped> {
-        
-        const selectorItemChat = 'a[href*="/chat/"]';
-        const selectorPanel = '.b8812f16'; // El contenedor que subiste en el HTML
-        const selectorBotonAbrir = '.ds-icon-button';
-
         try {
-            
-            const panel = page.locator(selectorPanel);
+            const panel = page.locator(SELECTORES.panelSidebar);
             const estaCerrado = !(await panel.isVisible());
 
             if (estaCerrado) {
-                const btnAbrir = page.locator(selectorBotonAbrir).first();
+                const btnAbrir = page.locator(SELECTORES.botonAbrirSidebar).first();
                 if (await btnAbrir.count() > 0) {
                     await btnAbrir.click();
-                    await page.waitForSelector(selectorItemChat, { state: 'attached', timeout: 5000 });
+                    await page.waitForSelector(SELECTORES.itemChat, {
+                        state: 'attached',
+                        timeout: TIMEOUTS.sidebar,
+                    });
                 }
             }
 
-           
-            const chats = await page.evaluate((sel) => {
-                const results: any[] = [];
-                const elements = document.querySelectorAll(sel);
-
-                elements.forEach((el, index) => {
+            const chats = await page.evaluate((sel: string) => {
+                const results: Array<{ id: string; title: string; url: string }> = [];
+                document.querySelectorAll(sel).forEach((el, index) => {
                     if (el instanceof HTMLElement) {
-                        const href = el.getAttribute('href') || '';
-                        
-                        const fullText = el.innerText || '';
-                        const cleanTitle = fullText.split('\n')[0]?.trim() || 'Sin título';
-
+                        const href = el.getAttribute('href') ?? '';
+                        const cleanTitle = el.innerText.split('\n')[0]?.trim() ?? 'Sin título';
                         results.push({
-                            id: href.split('/').pop() || `ds-${index}`,
+                            id: href.split('/').pop() ?? `ds-${index}`,
                             title: cleanTitle || 'Sin título',
-                            url: href
+                            url: href,
                         });
                     }
                 });
                 return results;
-            }, selectorItemChat);
+            }, SELECTORES.itemChat);
 
-           
             const final: HistoryGrouped = { 0: [] };
             chats.forEach(chat => {
-                (final[0] ??= []).push({
-                    ...chat,
-                    listGroup: 0
-                });
+                (final[0] ??= []).push({ ...chat, listGroup: 0 });
             });
-
             return final;
 
-        } catch (error: any) {
-            console.error(`[DeepSeekProvider] Error al extraer historial:`, error.message);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error(`[DeepSeekProvider] Error al extraer historial:`, msg);
             return { 0: [] };
         }
     }
 }
-

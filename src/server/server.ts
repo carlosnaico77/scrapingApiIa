@@ -14,17 +14,29 @@ export class Server {
         const port = process.env.PORT || 3500;
 
         try {
-
             console.log("[System] Iniciando navegador, por favor espera...");
             await this.service.iniciar();
 
-            this.app.listen(port, () => {
+            const httpServer = this.app.listen(port, () => {
                 console.log(`[OK] Servidor listo en http://localhost:${port}`);
                 console.log(`[OK] Navegador listo para recibir consultas.`);
             });
+
+            const shutdown = async (signal: string) => {
+                console.log(`\n[System] Señal ${signal} recibida. Cerrando...`);
+                await this.service.cerrar();
+                httpServer.close(() => {
+                    console.log("[System] Servidor cerrado correctamente.");
+                    process.exit(0);
+                });
+            };
+
+            process.on('SIGINT', () => { void shutdown('SIGINT'); });
+            process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
+
         } catch (error) {
             console.error("[Error] No se pudo iniciar el navegador:", error);
-            process.exit(1)
+            process.exit(1);
         }
     }
 }

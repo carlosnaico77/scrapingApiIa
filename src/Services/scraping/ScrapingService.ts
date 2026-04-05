@@ -11,7 +11,7 @@ export class ScrapingService {
     constructor(private geminiProvider: IIAProvider, private deepSeekProvider: IIAProvider) {
         this.providers = {
             "DeepSeek": this.deepSeekProvider,
-            "Gemini": this.geminiProvider
+            "Gemini": this.geminiProvider,
         };
     }
 
@@ -27,8 +27,10 @@ export class ScrapingService {
 
             for (const [name, provider] of Object.entries(this.providers)) {
                 const iaName = name as IAProviderName;
-                this.pages[iaName] = await this.context.newPage();
-                await this.pages[iaName]!.goto(provider.url);
+                const page = await this.context.newPage();
+                this.pages[iaName] = page;
+                await page.goto(provider.url);
+                await provider.validarSelectores(page);
             }
 
             this.initialized = true;
@@ -38,6 +40,16 @@ export class ScrapingService {
         }
     }
 
+    async cerrar() {
+        if (this.context) {
+            await this.context.close();
+            this.initialized = false;
+        }
+    }
+
+    estaInicializado(): boolean {
+        return this.initialized;
+    }
 
     async consultar(proveedor: IAProviderName, consulta: string): Promise<string> {
         await this.iniciar();
@@ -45,8 +57,9 @@ export class ScrapingService {
         if (!page) throw new Error(`Página de ${proveedor} no inicializada`);
         try {
             return await this.providers[proveedor].consultar(page, consulta);
-        } catch (error: any) {
-            console.error(`[ScrapingService] Error en proveedor ${proveedor}:`, error.message);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error(`[ScrapingService] Error en proveedor ${proveedor}:`, msg);
             throw new Error(`El servicio de ${proveedor} no responde correctamente en este momento.`);
         }
     }
@@ -57,8 +70,9 @@ export class ScrapingService {
             const page = this.pages[ia];
             if (!page) return {};
             return await this.providers[ia].extraerHistorial(page);
-        } catch (error: any) {
-            console.error(`[ScrapingService] Fallo al extraer historial de ${ia}:`, error.message);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error(`[ScrapingService] Fallo al extraer historial de ${ia}:`, msg);
             return {};
         }
     }

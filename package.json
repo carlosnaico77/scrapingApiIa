@@ -4,7 +4,7 @@
   "description": "Proyecto de Ia: Por Carlos Lozano Y Jhonatan Ramirez",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "tsc && node --test dist/tests/limpiarMarkdown.test.js",
     "dev": "tsc && node dist/index.js",
     "tunel": "cloudflared tunnel --url http://localhost:3500"
   },
