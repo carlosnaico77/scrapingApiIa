@@ -25,6 +25,7 @@ export interface RespuestaConsulta {
 export interface IIAProvider {
     url: string;
     consultar(page: Page, consulta: string, idConversacion?: string): Promise<{ texto: string; id: string; titulo: string }>;
+    consultarConArchivo(page: Page, consulta: string, rutaArchivo: string, idConversacion?: string): Promise<{ texto: string; id: string; titulo: string }>;
     extraerHistorial(page: Page): Promise<HistoryGrouped>;
     validarSelectores(page: Page): Promise<void>;
 }

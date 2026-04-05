@@ -16,6 +16,7 @@ export class ScrapingService {
     }
 
     async iniciar() {
+        
         if (this.initialized) return;
         try {
             const userPath = path.join(rootRaiz, "auth");
@@ -61,6 +62,19 @@ export class ScrapingService {
             const msg = error instanceof Error ? error.message : String(error);
             console.error(`[ScrapingService] Error en proveedor ${proveedor}:`, msg);
             throw new Error(`El servicio de ${proveedor} no responde correctamente en este momento.`);
+        }
+    }
+
+    async consultarConArchivo(proveedor: IAProviderName, consulta: string, rutaArchivo: string, idConversacion?: string): Promise<{ texto: string; id: string; titulo: string }> {
+        await this.iniciar();
+        const page = this.pages[proveedor];
+        if (!page) throw new Error(`Página de ${proveedor} no inicializada`);
+        try {
+            return await this.providers[proveedor].consultarConArchivo(page, consulta, rutaArchivo, idConversacion);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error(`[ScrapingService] Error subiendo archivo a ${proveedor}:`, msg);
+            throw new Error(`El servicio de ${proveedor} no pudo procesar el archivo.`);
         }
     }
 

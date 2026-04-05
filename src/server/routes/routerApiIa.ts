@@ -1,8 +1,21 @@
-import { Router } from "../../config/config.js";
+import { Router, multer } from "../../config/config.js";
 import { ScrapingService } from "../../Services/scraping/ScrapingService.js";
 import type { IAProviderName } from "../../interfaces/ia.interfaces.js";
+import { unlink } from "node:fs/promises";
 
 const PROVEEDORES_SOPORTADOS: IAProviderName[] = ["DeepSeek", "Gemini"];
+
+const TIPOS_PERMITIDOS = new Set([
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
+]);
+
+const upload = multer({
+    dest: 'uploads/',
+    limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+    fileFilter: (_req, file, cb) => {
+        cb(null, TIPOS_PERMITIDOS.has(file.mimetype));
+    },
+});
 
 function resolverProveedor(agente: string): IAProviderName | null {
     const nombre = agente.charAt(0).toUpperCase() + agente.slice(1).toLowerCase();
@@ -41,21 +54,61 @@ export class RouterApiIa {
                     return res.status(404).json({ error: "IA no soportada" });
                 }
 
-
                 const resultado = await this.service.consultar(proveedor, consulta, idConversacion);
-
-                // Retornamos la estructura completa
                 return res.json({
                     success: true,
                     agente: proveedor,
                     message: resultado.texto,
                     idConversacion: resultado.id,
-                    tituloConversacion: resultado.titulo
+                    tituloConversacion: resultado.titulo,
                 });
 
             } catch (error: unknown) {
                 const msg = error instanceof Error ? error.message : "Error desconocido";
                 return res.status(503).json({ success: false, error: msg });
+            }
+        });
+
+        // POST /api/consultar-archivo
+        // Body: multipart/form-data con campos agente, consulta, idConversacion? y archivo (imagen o PDF)
+        this.router.post("/consultar-archivo", upload.single("archivo"), async (req, res) => {
+            const archivo = req.file;
+            try {
+                const { agente, consulta, idConversacion } = req.body as {
+                    agente: string;
+                    consulta: string;
+                    idConversacion?: string;
+                };
+
+                if (!agente || !consulta) {
+                    return res.status(400).json({ error: "Faltan campos: agente y consulta son requeridos" });
+                }
+                if (!archivo) {
+                    return res.status(400).json({ error: "Falta el archivo (imagen o PDF)" });
+                }
+
+                const proveedor = resolverProveedor(agente);
+                if (!proveedor) {
+                    return res.status(404).json({ error: "IA no soportada" });
+                }
+
+                const resultado = await this.service.consultarConArchivo(proveedor, consulta, archivo.path, idConversacion);
+                return res.json({
+                    success: true,
+                    agente: proveedor,
+                    message: resultado.texto,
+                    idConversacion: resultado.id,
+                    tituloConversacion: resultado.titulo,
+                });
+
+            } catch (error: unknown) {
+                const msg = error instanceof Error ? error.message : "Error desconocido";
+                return res.status(503).json({ success: false, error: msg });
+            } finally {
+                // Borrar el archivo temporal siempre, haya éxito o error
+                if (archivo?.path) {
+                    await unlink(archivo.path).catch(() => undefined);
+                }
             }
         });
 

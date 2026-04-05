@@ -7,6 +7,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import compression from "compression";
 import queue from "express-queue";
+import multer from "multer";
 
 loadEnvFile();
 
@@ -14,5 +15,5 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 export const rootRaiz = path.join(__dirname, "../../");
 
-export { chromium, path, express, Router, helmet, morgan, compression, queue };
+export { chromium, path, express, Router, helmet, morgan, compression, queue, multer };
 export type { Page, BrowserContext, Locator };

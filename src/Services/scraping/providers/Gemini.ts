@@ -12,6 +12,8 @@ const SELECTORES = {
     itemConversacion: '.conversation-items-container',
     linkConversacion: 'a[data-test-id="conversation"]',
     tituloConversacion: '.conversation-title',
+    // Botón para adjuntar archivos (imagen/PDF) en el área de input
+    botonSubirArchivo: 'button[data-test-id="upload-files-button"]',
 } as const;
 
 const LABELS = {
@@ -43,13 +45,12 @@ export class GeminiProvider implements IIAProvider {
         try {
 
             if (idConversacion && idConversacion.trim() !== "") {
-                const urlDestino = `${this.url}/chat/${idConversacion}`;
+                const urlDestino = `${this.url}/app/${idConversacion}`;
                 if (!page.url().includes(idConversacion)) {
                     await page.goto(urlDestino, { waitUntil: 'networkidle' });
                 }
             } else {
-
-                if (page.url().includes('/chat/')) {
+                if (page.url().includes('/app/')) {
                     await page.goto(`${this.url}/`, { waitUntil: 'networkidle' });
                 }
             }
@@ -106,6 +107,79 @@ export class GeminiProvider implements IIAProvider {
                 titulo: titulo ?? "Chat sin título"
             };
 
+        } catch (err) {
+            await page.reload();
+            throw err;
+        }
+    }
+
+    async consultarConArchivo(page: Page, consulta: string, rutaArchivo: string, idConversacion?: string): Promise<{ texto: string; id: string; titulo: string }> {
+        try {
+            if (idConversacion && idConversacion.trim() !== "") {
+                const urlDestino = `${this.url}/app/${idConversacion}`;
+                if (!page.url().includes(idConversacion)) {
+                    await page.goto(urlDestino, { waitUntil: 'networkidle' });
+                }
+            } else {
+                if (page.url().includes('/app/')) {
+                    await page.goto(`${this.url}/`, { waitUntil: 'networkidle' });
+                }
+            }
+
+            const inputChat = page
+                .getByLabel(LABELS.principal)
+                .or(page.getByLabel(LABELS.alternativo));
+            await inputChat.waitFor({ state: 'visible', timeout: TIMEOUTS.esperarInput });
+
+            // Abrir el file chooser via el botón de adjuntar
+            const [fileChooser] = await Promise.all([
+                page.waitForEvent('filechooser', { timeout: TIMEOUTS.esperarInput }),
+                page.locator(SELECTORES.botonSubirArchivo).first().click(),
+            ]);
+            await fileChooser.setFiles(rutaArchivo);
+
+            // Esperar que el archivo aparezca como adjunto en el UI
+            await page.waitForTimeout(1500);
+
+            const ultimoAntes = page.locator(SELECTORES.respuesta).last();
+            const contenidoViejo = (await ultimoAntes.count() > 0) ? await ultimoAntes.innerText() : "";
+
+            await inputChat.fill(consulta);
+            await page.keyboard.press('Enter');
+
+            await page.waitForFunction(
+                (args: { sel: string; old: string }) => {
+                    const msgs = document.querySelectorAll(args.sel);
+                    const last = msgs.length > 0 ? (msgs[msgs.length - 1] as HTMLElement).innerText : "";
+                    return last !== args.old && last.length > 0;
+                },
+                { sel: SELECTORES.respuesta, old: contenidoViejo },
+                { timeout: TIMEOUTS.esperarRespuesta }
+            );
+
+            await page.waitForFunction(
+                (args: { sel: string; stableMs: number }) =>
+                    new Promise<boolean>((resolve) => {
+                        const els = document.querySelectorAll(args.sel);
+                        const last = els[els.length - 1] as HTMLElement | undefined;
+                        if (!last?.innerText) { resolve(false); return; }
+                        const snapshot = last.innerText;
+                        setTimeout(() => resolve(last.innerText === snapshot), args.stableMs);
+                    }),
+                { sel: SELECTORES.respuesta, stableMs: TIMEOUTS.estabilizarTexto },
+                { timeout: TIMEOUTS.esperarRespuesta }
+            );
+
+            const textoFinal = await limpiarMarkdown(page.locator(SELECTORES.respuesta).last());
+            const urlActual = page.url();
+            const idMatch = urlActual.match(/\/app\/([a-zA-Z0-9]+)/);
+            const nuevoId = idMatch?.[1] ?? "";
+            const titulo = await page.evaluate((sel) => {
+                const el = document.querySelector(sel);
+                return el ? (el as HTMLElement).innerText.split('\n')[0] : "Chat de Gemini";
+            }, SELECTORES.tituloConversacion).catch(() => "Chat de Gemini");
+
+            return { texto: textoFinal, id: nuevoId, titulo: titulo ?? "Chat sin título" };
         } catch (err) {
             await page.reload();
             throw err;
