@@ -80,6 +80,7 @@ export class DeepSeekProvider implements IIAProvider {
             };
 
         } catch (err) {
+            await page.screenshot({ path: 'dist/deepseek-error.png', fullPage: true }).catch(() => {});
             await page.reload();
             throw err;
         }
