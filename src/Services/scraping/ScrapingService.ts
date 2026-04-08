@@ -1,6 +1,6 @@
 import { chromium, path, rootRaiz, type Page, type BrowserContext } from "../../config/config.js";
 import type { IAProviderName, HistoryGrouped, IIAProvider } from "../../interfaces/ia.interfaces.js";
-
+import type {IConsultaResultado} from "../../interfaces/ia.interfaces.js"
 export class ScrapingService {
 
     private pages: Partial<Record<IAProviderName, Page>> = {};
@@ -38,13 +38,12 @@ export class ScrapingService {
         }
     }
 
-
-    async consultar(proveedor: IAProviderName, consulta: string): Promise<string> {
+    async consultar(proveedor: IAProviderName, consulta: string, idConversacion?: string): Promise<IConsultaResultado> {
         await this.iniciar();
         const page = this.pages[proveedor];
         if (!page) throw new Error(`Página de ${proveedor} no inicializada`);
         try {
-            return await this.providers[proveedor].consultar(page, consulta);
+            return await this.providers[proveedor].consultar(page, consulta,idConversacion);
         } catch (error: any) {
             console.error(`[ScrapingService] Error en proveedor ${proveedor}:`, error.message);
             throw new Error(`El servicio de ${proveedor} no responde correctamente en este momento.`);

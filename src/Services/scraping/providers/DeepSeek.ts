@@ -1,17 +1,34 @@
 import type { Page } from "../../../config/config.js";
 import type { HistoryGrouped, IIAProvider } from "../../../interfaces/ia.interfaces.js";
 import { limpiarMarkdown } from "../../utils/funcionesGenericas.js";
+import type {IConsultaResultado} from "../../../interfaces/ia.interfaces.js"
 
 export class DeepSeekProvider implements IIAProvider {
 
     public readonly url = process.env.URLdeepseek!;
 
-    async consultar(page: Page, consulta: string): Promise<string> {
+    async consultar(page: Page, consulta: string, idConversacion?: string): Promise<IConsultaResultado> {
+        
         const selectorRespuesta = '.ds-markdown';
         const placeholderPrincipal = 'Mensaje a DeepSeek';
         const placeholderAlt = 'Message DeepSeek';
-
+        
         try {
+
+             if (idConversacion && idConversacion.trim() !== "") {
+                
+                const urlDestino = `${this.url}/a/chat/s/${idConversacion}`;
+
+                if (!page.url().includes(idConversacion)) {
+                    await page.goto(urlDestino, { waitUntil: 'domcontentloaded' });
+                }
+            } else {
+                // Para chat nuevo, la raíz suele ser suficiente
+                if (page.url().includes('/chat/')) {
+                    await page.goto(`${this.url}/`, { waitUntil: 'domcontentloaded' });
+                }
+            }
+            
             const inputChat = page.getByPlaceholder(placeholderPrincipal).or(page.getByPlaceholder(placeholderAlt));
             await inputChat.waitFor({ state: 'visible', timeout: 10000 });
 
@@ -38,7 +55,30 @@ export class DeepSeekProvider implements IIAProvider {
                 textoActual = await respuestaLocator.innerText();
             }
 
-            return await limpiarMarkdown(respuestaLocator);
+            const cleanRespuesta = await limpiarMarkdown(respuestaLocator);
+
+            // Extracción de ID y Título
+            const finalUrl = page.url();
+            const idFinal = finalUrl.split('/').pop() || (idConversacion || "");
+            
+            let tituloFinal = "Sin título";
+            try {
+                if (!idConversacion) await page.waitForTimeout(2000);
+                const chatLink = page.locator(`a[href*="${idFinal}"]`).first();
+                if (await chatLink.count() > 0) {
+                    const fullText = await chatLink.innerText();
+                    tituloFinal = fullText.split('\n')[0]?.trim() || "Sin título";
+                }
+            } catch (e) {
+                 console.error("[DeepSeek] No se pudo extraer el título");
+            }
+
+            return {
+                respuesta: cleanRespuesta,
+                id: idFinal,
+                titulo: tituloFinal
+            };
+
         } catch (err) {
             await page.reload();
             throw err;

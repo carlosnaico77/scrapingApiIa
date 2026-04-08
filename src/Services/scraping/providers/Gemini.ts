@@ -1,15 +1,33 @@
 import type { Page } from "../../../config/config.js";
 import { limpiarMarkdown } from "../../utils/funcionesGenericas.js";
 import type { IIAProvider, HistoryGrouped } from "../../../interfaces/ia.interfaces.js";
-
+import type {IConsultaResultado} from "../../../interfaces/ia.interfaces.js"
 export class GeminiProvider implements IIAProvider {
     public readonly url = process.env.URLGEMINI!;
-    async consultar(page: Page, consulta: string): Promise<string> {
+    
+    
+    async consultar(page: Page, consulta: string, idConversacion?: string): Promise<IConsultaResultado> {
+        
         const selectorRespuesta = '.markdown';
         const labelPrincipal = 'Introduce una petición para Gemini';
         const labelAlt = 'Pregunta a Gemini';
 
         try {
+
+            if (idConversacion && idConversacion.trim() !== "") {
+                if (!page.url().includes(idConversacion)) {
+                    const baseUrl = this.url.split('?')[0];
+                    const query = this.url.split('?')[1] ? `?${this.url.split('?')[1]}` : '';
+                    const urlDestino = `${baseUrl}/${idConversacion}${query}`;
+                    await page.goto(urlDestino, { waitUntil: 'domcontentloaded' });
+                }
+            } else {
+                // Para chat nuevo, si la URL actual tiene un ID de conversación, volvemos a la raíz
+                if (page.url().match(/\/app\/[a-zA-Z0-9]+/)) {
+                    await page.goto(this.url, { waitUntil: 'domcontentloaded' });
+                }
+            }
+            
             const inputChat = page.getByLabel(labelPrincipal).or(page.getByLabel(labelAlt));
             await inputChat.waitFor({ state: 'visible', timeout: 10000 });
 
@@ -35,7 +53,32 @@ export class GeminiProvider implements IIAProvider {
                 textoActual = await respuestaLocator.innerText();
             }
 
-            return await limpiarMarkdown(respuestaLocator);
+            const cleanRespuesta = await limpiarMarkdown(respuestaLocator);
+            
+            // Extracción de ID y Título
+            const finalUrl = page.url();
+            const idMatch = finalUrl.match(/\/app\/([a-zA-Z0-9]+)/);
+            const idFinal = idMatch ? idMatch[1] : (idConversacion || "");
+            
+            let tituloFinal = "Sin título";
+            try {
+                // Esperar un momento por si la IA está generando el título (en chats nuevos)
+                if (!idConversacion) await page.waitForTimeout(2000);
+                
+                const selectorTitulo = `a[href*="${idFinal}"] .conversation-title`;
+                const tituloLocator = page.locator(selectorTitulo).first();
+                if (await tituloLocator.count() > 0) {
+                    tituloFinal = (await tituloLocator.innerText()).trim();
+                }
+            } catch (e) {
+                console.error("[Gemini] No se pudo extraer el título");
+            }
+
+            return {
+                respuesta: cleanRespuesta,
+                id: idFinal,
+                titulo: tituloFinal
+            };
         } catch (err) {
             await page.reload();
             throw err;
