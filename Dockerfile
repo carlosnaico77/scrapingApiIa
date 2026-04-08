@@ -8,8 +8,8 @@ COPY package*.json ./
 # Instalar las dependencias de Node.js
 RUN npm install
 
-# Instalar Chromium y sus dependencias del SO, que es necesario para Playwright
-RUN npx playwright install --with-deps chromium
+# Instalar Chrome y sus dependencias del SO, útil para esquivar bloqueos
+RUN npx playwright install --with-deps chromium chrome
 
 # Copiar el resto del código
 COPY . .
