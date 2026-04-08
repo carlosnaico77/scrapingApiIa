@@ -23,4 +23,6 @@ EXPOSE 3500
 # Añadir un usuario sin privilegios para mayor seguridad (opcional, aunque Playwright requiere precauciones extra con el usuario, dejaremos root por defecto para evitar problemas de permisos con el navegador)
 
 # Iniciar la aplicación
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/index.js"];
+
+
