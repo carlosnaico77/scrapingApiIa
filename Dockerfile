@@ -13,9 +13,7 @@ RUN npx playwright install --with-deps chromium
 
 # Copiar el resto del código
 COPY . .
-
-# Compilar TypeScript
-RUN npx tsc
+RUN npm install -g typescript && tsc
 
 # Exponer el puerto
 EXPOSE 3500
