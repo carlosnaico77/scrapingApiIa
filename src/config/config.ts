@@ -8,7 +8,7 @@ import morgan from "morgan";
 import compression from "compression";
 import queue from "express-queue";
 
-loadEnvFile();
+try { loadEnvFile(); } catch (e) {}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
