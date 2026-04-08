@@ -20,7 +20,7 @@ export class ScrapingService {
         try {
             const userPath = path.join(rootRaiz, "auth");
             this.context = await chromium.launchPersistentContext(userPath, {
-                headless: false,
+                headless: true,
                 channel: "chrome",
                 args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
             });
