@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: scraping-api-ia
+    ports:
+      - "3500:3500"
+    env_file:
+      - .env
+    restart: unless-stopped
+    # Asegúrate de haber copiado .env.example a .env y configurado las variables (URLdeepseek, URLGEMINI, PORT)
