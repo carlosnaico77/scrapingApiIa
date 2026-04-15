@@ -2,8 +2,10 @@
   "name": "scrapingapiia",
   "version": "1.0.0",
   "description": "Proyecto de Ia: Por Carlos Lozano Y Jhonatan Ramirez",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
+    "start": "node dist/index.js",
+    "build": "tsc",
     "test": "tsc && node --test dist/tests/limpiarMarkdown.test.js",
     "test:ocr": "tsc && node --test dist/tests/imagenOcr.test.js",
     "test:all": "tsc && node --test dist/tests/*.test.js",
