@@ -9,7 +9,11 @@ import compression from "compression";
 import queue from "express-queue";
 import multer from "multer";
 
-loadEnvFile();
+try {
+  loadEnvFile();
+} catch (error) {
+  console.warn("No .env file found, relying on environment variables.");
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
