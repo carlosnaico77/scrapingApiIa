@@ -1,6 +1,7 @@
 import { chromium, path, rootRaiz, type Page, type BrowserContext } from "../../config/config.js";
 import type { IAProviderName, HistoryGrouped, IIAProvider } from "../../interfaces/ia.interfaces.js";
 import type {IConsultaResultado} from "../../interfaces/ia.interfaces.js"
+
 export class ScrapingService {
 
     private pages: Partial<Record<IAProviderName, Page>> = {};
